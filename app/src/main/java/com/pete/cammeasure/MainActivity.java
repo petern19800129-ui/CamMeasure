@@ -61,9 +61,11 @@ public class MainActivity extends Activity implements ArMeasureRenderer.Listener
         arSurface = findViewById(R.id.arSurface);
         arSurface.setEGLContextClientVersion(2);
         arSurface.setPreserveEGLContextOnPause(true);
-        arSurface.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
         renderer = new ArMeasureRenderer(this, this);
         arSurface.setRenderer(renderer);
+        // GLSurfaceView requires setRenderer() before setRenderMode(). Calling
+        // these in the opposite order crashes the activity during startup.
+        arSurface.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
 
         widthButton.setOnClickListener(v -> selectMode(MeasurementEngine.Mode.WIDTH));
         heightButton.setOnClickListener(v -> selectMode(MeasurementEngine.Mode.HEIGHT));
