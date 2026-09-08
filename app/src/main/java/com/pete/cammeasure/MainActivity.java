@@ -16,7 +16,11 @@ import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.text.Editable;
 import android.text.InputType;
+import android.text.SpannableString;
+import android.text.Spanned;
 import android.text.TextWatcher;
+import android.text.style.RelativeSizeSpan;
+import android.text.style.StyleSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -58,10 +62,22 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
+        final int sidePad = dp(10);
+        final int topPad = dp(8);
+        final int baseBottomPad = dp(6);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(10), dp(8), dp(10), dp(8));
+        root.setPadding(sidePad, topPad, sidePad, baseBottomPad);
         root.setBackgroundColor(0xFFF7F7F7);
+
+        // Android 15/16 can draw apps behind the navigation bar. Add the actual
+        // system bottom inset so the last T9 row is always fully visible.
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            int systemBottom = insets.getSystemWindowInsetBottom();
+            v.setPadding(sidePad, topPad, sidePad, baseBottomPad + systemBottom);
+            return insets;
+        });
 
         TextView title = new TextView(this);
         title.setText("Unified Contact");
@@ -96,7 +112,7 @@ public class MainActivity extends Activity {
 
         LinearLayout bottomPanel = new LinearLayout(this);
         bottomPanel.setOrientation(LinearLayout.VERTICAL);
-        bottomPanel.setPadding(0, dp(5), 0, 0);
+        bottomPanel.setPadding(0, dp(4), 0, 0);
         root.addView(bottomPanel);
 
         LinearLayout searchRow = new LinearLayout(this);
@@ -106,15 +122,15 @@ public class MainActivity extends Activity {
         searchView = new EditText(this);
         searchView.setSingleLine(true);
         searchView.setHint("T9: 7383 = PETE");
-        searchView.setTextSize(20);
+        searchView.setTextSize(19);
         searchView.setTextColor(0xFF202020);
         searchView.setHintTextColor(0xFF999999);
         searchView.setInputType(InputType.TYPE_CLASS_PHONE);
         searchView.setFocusable(false);
         searchView.setCursorVisible(false);
         searchView.setPadding(dp(14), 0, dp(10), 0);
-        searchView.setBackground(roundRect(0xFFEEEEEE, 12, 0, 0));
-        searchRow.addView(searchView, new LinearLayout.LayoutParams(0, dp(46), 1f));
+        searchView.setBackground(roundRect(0xFFF0F0F0, 14, 0xFFE0E0E0, 1));
+        searchRow.addView(searchView, new LinearLayout.LayoutParams(0, dp(44), 1f));
 
         countryButton = new Button(this);
         countryButton.setText("WA +" + countryCode);
@@ -124,50 +140,57 @@ public class MainActivity extends Activity {
         countryButton.setPadding(0, 0, 0, 0);
         countryButton.setMinHeight(0);
         countryButton.setMinimumHeight(0);
-        countryButton.setBackground(roundRect(0xFFE5E5E5, 12, 0xFFD0D0D0, 1));
+        countryButton.setBackground(roundRect(0xFFE8E8E8, 14, 0xFFD2D2D2, 1));
         countryButton.setOnClickListener(v -> editCountryCode());
-        LinearLayout.LayoutParams countryLp = new LinearLayout.LayoutParams(dp(76), dp(46));
+        LinearLayout.LayoutParams countryLp = new LinearLayout.LayoutParams(dp(76), dp(44));
         countryLp.setMargins(dp(6), 0, 0, 0);
         searchRow.addView(countryButton, countryLp);
         bottomPanel.addView(searchRow);
 
         LinearLayout keypad = new LinearLayout(this);
         keypad.setOrientation(LinearLayout.VERTICAL);
-        keypad.setPadding(0, dp(5), 0, 0);
+        keypad.setPadding(0, dp(4), 0, 0);
+
         addT9Row(keypad,
-                new String[]{"1", "2\nABC", "3\nDEF"},
+                new String[]{"1", "", "2", "ABC", "3", "DEF"},
                 new String[]{"1", "2", "3"});
         addT9Row(keypad,
-                new String[]{"4\nGHI", "5\nJKL", "6\nMNO"},
+                new String[]{"4", "GHI", "5", "JKL", "6", "MNO"},
                 new String[]{"4", "5", "6"});
         addT9Row(keypad,
-                new String[]{"7\nPQRS", "8\nTUV", "9\nWXYZ"},
+                new String[]{"7", "PQRS", "8", "TUV", "9", "WXYZ"},
                 new String[]{"7", "8", "9"});
 
         LinearLayout lastRow = new LinearLayout(this);
         lastRow.setOrientation(LinearLayout.HORIZONTAL);
 
-        Button clear = t9Button("Clear");
-        clear.setTextSize(13);
+        Button clear = t9Button(simpleLabel("CLEAR"));
+        clear.setTextSize(12);
+        clear.setContentDescription("Clear T9 search");
+        clear.setBackground(roundRect(0xFFEDEDED, 16, 0xFFD2D2D2, 1));
         clear.setOnClickListener(v -> searchView.setText(""));
-        addKey(lastRow, clear, true);
+        addKey(lastRow, clear);
 
-        Button zero = t9Button("0");
+        Button zero = t9Button(t9Label("0", "+"));
         zero.setOnClickListener(v -> appendT9("0"));
-        addKey(lastRow, zero, true);
+        addKey(lastRow, zero);
 
-        Button back = t9Button("⌫");
-        back.setTextSize(22);
+        Button back = t9Button(simpleLabel("⌫"));
+        back.setTextSize(24);
+        back.setContentDescription("Backspace");
+        back.setBackground(roundRect(0xFFEDEDED, 16, 0xFFD2D2D2, 1));
         back.setOnClickListener(v -> backspaceT9());
         back.setOnLongClickListener(v -> {
             searchView.setText("");
             return true;
         });
-        addKey(lastRow, back, true);
+        addKey(lastRow, back);
+
         keypad.addView(lastRow);
         bottomPanel.addView(keypad);
 
         setContentView(root);
+        root.requestApplyInsets();
 
         searchView.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -181,33 +204,52 @@ public class MainActivity extends Activity {
     private void addT9Row(LinearLayout keypad, String[] labels, String[] digits) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        for (int i = 0; i < labels.length; i++) {
+        for (int i = 0; i < digits.length; i++) {
             final String digit = digits[i];
-            Button b = t9Button(labels[i]);
+            String number = labels[i * 2];
+            String letters = labels[i * 2 + 1];
+            Button b = t9Button(t9Label(number, letters));
+            b.setContentDescription(letters.isEmpty() ? number : number + " " + letters);
             b.setOnClickListener(v -> appendT9(digit));
-            addKey(row, b, true);
+            addKey(row, b);
         }
         keypad.addView(row);
     }
 
-    private void addKey(LinearLayout row, Button button, boolean margin) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(52), 1f);
-        if (margin) lp.setMargins(dp(3), dp(2), dp(3), dp(2));
+    private void addKey(LinearLayout row, Button button) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(47), 1f);
+        lp.setMargins(dp(3), dp(2), dp(3), dp(2));
         row.addView(button, lp);
     }
 
-    private Button t9Button(String text) {
+    private Button t9Button(CharSequence text) {
         Button b = new Button(this);
         b.setText(text);
         b.setAllCaps(false);
-        b.setTextSize(17);
-        b.setTextColor(0xFF252525);
+        b.setTextSize(19);
+        b.setTextColor(0xFF242424);
         b.setGravity(Gravity.CENTER);
         b.setMinHeight(0);
         b.setMinimumHeight(0);
         b.setPadding(0, 0, 0, 0);
-        b.setBackground(roundRect(0xFFF0F0F0, 14, 0xFFD7D7D7, 1));
+        b.setLineSpacing(0f, 0.88f);
+        b.setBackground(roundRect(0xFFFAFAFA, 16, 0xFFD5D5D5, 1));
+        b.setElevation(dp(1));
         return b;
+    }
+
+    private CharSequence t9Label(String number, String letters) {
+        if (letters == null || letters.isEmpty()) return simpleLabel(number);
+        String combined = number + "\n" + letters;
+        SpannableString s = new SpannableString(combined);
+        s.setSpan(new StyleSpan(Typeface.BOLD), 0, number.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        int lettersStart = number.length() + 1;
+        s.setSpan(new RelativeSizeSpan(0.58f), lettersStart, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return s;
+    }
+
+    private CharSequence simpleLabel(String text) {
+        return text;
     }
 
     private GradientDrawable roundRect(int fill, int radiusDp, int stroke, int strokeDp) {
