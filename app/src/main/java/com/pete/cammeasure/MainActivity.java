@@ -26,6 +26,7 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -55,7 +56,7 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
-        int pad = dp(12);
+        int pad = dp(10);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(pad, pad, pad, pad);
@@ -63,16 +64,16 @@ public class MainActivity extends Activity {
 
         TextView title = new TextView(this);
         title.setText("Unified Contact");
-        title.setTextSize(26);
+        title.setTextSize(25);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setTextColor(0xFF202020);
         root.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Call, SMS and WhatsApp from one contact list");
-        subtitle.setTextSize(14);
+        subtitle.setText("T9 search · Call · SMS · WhatsApp");
+        subtitle.setTextSize(13);
         subtitle.setTextColor(0xFF666666);
-        subtitle.setPadding(0, 0, 0, dp(8));
+        subtitle.setPadding(0, 0, 0, dp(6));
         root.addView(subtitle);
 
         LinearLayout searchRow = new LinearLayout(this);
@@ -80,21 +81,58 @@ public class MainActivity extends Activity {
 
         searchView = new EditText(this);
         searchView.setSingleLine(true);
-        searchView.setHint("Search contacts or numbers");
-        searchView.setTextSize(16);
-        searchRow.addView(searchView, new LinearLayout.LayoutParams(0, dp(50), 1f));
+        searchView.setHint("T9: 7383 = PETE");
+        searchView.setTextSize(18);
+        searchView.setInputType(InputType.TYPE_CLASS_PHONE);
+        searchView.setShowSoftInputOnFocus(false);
+        searchRow.addView(searchView, new LinearLayout.LayoutParams(0, dp(48), 1f));
 
         countryButton = new Button(this);
         countryButton.setText("+" + countryCode);
         countryButton.setAllCaps(false);
         countryButton.setOnClickListener(v -> editCountryCode());
-        searchRow.addView(countryButton, new LinearLayout.LayoutParams(dp(82), dp(50)));
+        searchRow.addView(countryButton, new LinearLayout.LayoutParams(dp(78), dp(48)));
         root.addView(searchRow);
+
+        LinearLayout keypad = new LinearLayout(this);
+        keypad.setOrientation(LinearLayout.VERTICAL);
+        keypad.setPadding(0, dp(4), 0, dp(2));
+        addT9Row(keypad,
+                new String[]{"1", "2\nABC", "3\nDEF"},
+                new String[]{"1", "2", "3"});
+        addT9Row(keypad,
+                new String[]{"4\nGHI", "5\nJKL", "6\nMNO"},
+                new String[]{"4", "5", "6"});
+        addT9Row(keypad,
+                new String[]{"7\nPQRS", "8\nTUV", "9\nWXYZ"},
+                new String[]{"7", "8", "9"});
+
+        LinearLayout bottom = new LinearLayout(this);
+        bottom.setOrientation(LinearLayout.HORIZONTAL);
+        Button clear = t9Button("CLEAR");
+        clear.setOnClickListener(v -> searchView.setText(""));
+        bottom.addView(clear, new LinearLayout.LayoutParams(0, dp(44), 1f));
+
+        Button zero = t9Button("0\n+");
+        zero.setOnClickListener(v -> appendT9("0"));
+        bottom.addView(zero, new LinearLayout.LayoutParams(0, dp(44), 1f));
+
+        Button back = t9Button("⌫");
+        back.setTextSize(22);
+        back.setOnClickListener(v -> backspaceT9());
+        back.setOnLongClickListener(v -> {
+            searchView.setText("");
+            return true;
+        });
+        bottom.addView(back, new LinearLayout.LayoutParams(0, dp(44), 1f));
+        keypad.addView(bottom);
+        root.addView(keypad);
 
         statusView = new TextView(this);
         statusView.setText("Waiting for contacts permission…");
         statusView.setTextColor(0xFF666666);
-        statusView.setPadding(0, dp(6), 0, dp(6));
+        statusView.setTextSize(12);
+        statusView.setPadding(0, dp(3), 0, dp(3));
         root.addView(statusView);
 
         ListView list = new ListView(this);
@@ -113,6 +151,48 @@ public class MainActivity extends Activity {
             }
             @Override public void afterTextChanged(Editable s) {}
         });
+    }
+
+    private void addT9Row(LinearLayout keypad, String[] labels, String[] digits) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        for (int i = 0; i < labels.length; i++) {
+            final String digit = digits[i];
+            Button b = t9Button(labels[i]);
+            b.setOnClickListener(v -> appendT9(digit));
+            row.addView(b, new LinearLayout.LayoutParams(0, dp(44), 1f));
+        }
+        keypad.addView(row);
+    }
+
+    private Button t9Button(String text) {
+        Button b = new Button(this);
+        b.setText(text);
+        b.setAllCaps(false);
+        b.setTextSize(14);
+        b.setGravity(Gravity.CENTER);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setPadding(0, 0, 0, 0);
+        return b;
+    }
+
+    private void appendT9(String digit) {
+        int start = Math.max(searchView.getSelectionStart(), 0);
+        int end = Math.max(searchView.getSelectionEnd(), 0);
+        Editable text = searchView.getText();
+        text.replace(Math.min(start, end), Math.max(start, end), digit);
+    }
+
+    private void backspaceT9() {
+        Editable text = searchView.getText();
+        int start = Math.max(searchView.getSelectionStart(), 0);
+        int end = Math.max(searchView.getSelectionEnd(), 0);
+        if (start != end) {
+            text.delete(Math.min(start, end), Math.max(start, end));
+        } else if (start > 0) {
+            text.delete(start - 1, start);
+        }
     }
 
     private void ensureContactsPermission() {
@@ -168,18 +248,52 @@ public class MainActivity extends Activity {
 
     private void filterContacts(String query) {
         visibleContacts.clear();
-        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        String raw = query == null ? "" : query.trim();
+        String qLower = raw.toLowerCase(Locale.ROOT);
+        String qDigits = digitsOnly(raw);
+        boolean numericT9 = !raw.isEmpty() && qDigits.length() == raw.length();
+
         for (ContactItem item : allContacts) {
-            if (q.isEmpty()
-                    || item.name.toLowerCase(Locale.ROOT).contains(q)
-                    || item.number.toLowerCase(Locale.ROOT).contains(q)) {
-                visibleContacts.add(item);
+            boolean match;
+            if (raw.isEmpty()) {
+                match = true;
+            } else if (numericT9) {
+                String numberDigits = digitsOnly(item.number);
+                String nameDigits = nameToT9(item.name);
+                match = numberDigits.contains(qDigits) || nameDigits.contains(qDigits);
+            } else {
+                match = item.name.toLowerCase(Locale.ROOT).contains(qLower)
+                        || item.number.toLowerCase(Locale.ROOT).contains(qLower);
             }
+            if (match) visibleContacts.add(item);
         }
+
         if (adapter != null) adapter.notifyDataSetChanged();
         if (statusView != null) {
-            statusView.setText(visibleContacts.size() + " of " + allContacts.size() + " numbers");
+            String mode = numericT9 && !raw.isEmpty() ? " · T9" : "";
+            statusView.setText(visibleContacts.size() + " of " + allContacts.size() + " numbers" + mode);
         }
+    }
+
+    private static String nameToT9(String name) {
+        if (name == null) return "";
+        String normalized = Normalizer.normalize(name, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toUpperCase(Locale.ROOT);
+        StringBuilder out = new StringBuilder(normalized.length());
+        for (int i = 0; i < normalized.length(); i++) {
+            char c = normalized.charAt(i);
+            if (c >= 'A' && c <= 'C') out.append('2');
+            else if (c >= 'D' && c <= 'F') out.append('3');
+            else if (c >= 'G' && c <= 'I') out.append('4');
+            else if (c >= 'J' && c <= 'L') out.append('5');
+            else if (c >= 'M' && c <= 'O') out.append('6');
+            else if (c >= 'P' && c <= 'S') out.append('7');
+            else if (c >= 'T' && c <= 'V') out.append('8');
+            else if (c >= 'W' && c <= 'Z') out.append('9');
+            else if (c >= '0' && c <= '9') out.append(c);
+        }
+        return out.toString();
     }
 
     private void editCountryCode() {
@@ -283,7 +397,7 @@ public class MainActivity extends Activity {
             ContactItem item = visibleContacts.get(position);
             LinearLayout row = new LinearLayout(MainActivity.this);
             row.setOrientation(LinearLayout.VERTICAL);
-            row.setPadding(dp(8), dp(8), dp(8), dp(10));
+            row.setPadding(dp(8), dp(7), dp(8), dp(8));
             row.setBackgroundColor(0xFFFFFFFF);
 
             TextView name = new TextView(MainActivity.this);
@@ -297,23 +411,23 @@ public class MainActivity extends Activity {
             number.setText(item.number);
             number.setTextSize(14);
             number.setTextColor(0xFF666666);
-            number.setPadding(0, 0, 0, dp(4));
+            number.setPadding(0, 0, 0, dp(3));
             row.addView(number);
 
             LinearLayout first = new LinearLayout(MainActivity.this);
             first.setOrientation(LinearLayout.HORIZONTAL);
             Button call = actionButton("Call", v -> dial(item.number));
             Button sms = actionButton("SMS", v -> sms(item.number));
-            first.addView(call, new LinearLayout.LayoutParams(0, dp(46), 1f));
-            first.addView(sms, new LinearLayout.LayoutParams(0, dp(46), 1f));
+            first.addView(call, new LinearLayout.LayoutParams(0, dp(42), 1f));
+            first.addView(sms, new LinearLayout.LayoutParams(0, dp(42), 1f));
             row.addView(first);
 
             LinearLayout second = new LinearLayout(MainActivity.this);
             second.setOrientation(LinearLayout.HORIZONTAL);
             Button wa = actionButton("WhatsApp", v -> whatsapp(item.number, false));
             Button waCall = actionButton("WA Call", v -> whatsapp(item.number, true));
-            second.addView(wa, new LinearLayout.LayoutParams(0, dp(46), 1f));
-            second.addView(waCall, new LinearLayout.LayoutParams(0, dp(46), 1f));
+            second.addView(wa, new LinearLayout.LayoutParams(0, dp(42), 1f));
+            second.addView(waCall, new LinearLayout.LayoutParams(0, dp(42), 1f));
             row.addView(second);
 
             return row;
