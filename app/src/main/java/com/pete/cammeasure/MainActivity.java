@@ -9,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
@@ -84,8 +85,8 @@ public class MainActivity extends Activity {
         root.addView(statusView);
 
         ListView list = new ListView(this);
+        list.setDivider(new ColorDrawable(0xFFE4E4E4));
         list.setDividerHeight(1);
-        list.setDividerColor(0xFFE4E4E4);
         list.setClipToPadding(false);
         list.setPadding(0, 0, 0, dp(4));
         adapter = new ContactAdapter();
