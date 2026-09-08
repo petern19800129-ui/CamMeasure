@@ -5,10 +5,11 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.ContactsContract;
@@ -56,47 +57,82 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
-        int pad = dp(10);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(pad, pad, pad, pad);
+        root.setPadding(dp(10), dp(8), dp(10), dp(8));
         root.setBackgroundColor(0xFFF7F7F7);
 
         TextView title = new TextView(this);
         title.setText("Unified Contact");
-        title.setTextSize(25);
+        title.setTextSize(23);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setTextColor(0xFF202020);
         root.addView(title);
 
         TextView subtitle = new TextView(this);
         subtitle.setText("T9 search · Call · SMS · WhatsApp");
-        subtitle.setTextSize(13);
-        subtitle.setTextColor(0xFF666666);
-        subtitle.setPadding(0, 0, 0, dp(6));
+        subtitle.setTextSize(12);
+        subtitle.setTextColor(0xFF6A6A6A);
+        subtitle.setPadding(0, 0, 0, dp(3));
         root.addView(subtitle);
+
+        statusView = new TextView(this);
+        statusView.setText("Waiting for contacts permission…");
+        statusView.setTextColor(0xFF6A6A6A);
+        statusView.setTextSize(12);
+        statusView.setPadding(0, dp(2), 0, dp(4));
+        root.addView(statusView);
+
+        ListView list = new ListView(this);
+        list.setDividerHeight(1);
+        list.setDividerColor(0xFFE4E4E4);
+        list.setClipToPadding(false);
+        list.setPadding(0, 0, 0, dp(4));
+        adapter = new ContactAdapter();
+        list.setAdapter(adapter);
+        root.addView(list, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        LinearLayout bottomPanel = new LinearLayout(this);
+        bottomPanel.setOrientation(LinearLayout.VERTICAL);
+        bottomPanel.setPadding(0, dp(5), 0, 0);
+        root.addView(bottomPanel);
 
         LinearLayout searchRow = new LinearLayout(this);
         searchRow.setOrientation(LinearLayout.HORIZONTAL);
+        searchRow.setGravity(Gravity.CENTER_VERTICAL);
 
         searchView = new EditText(this);
         searchView.setSingleLine(true);
         searchView.setHint("T9: 7383 = PETE");
-        searchView.setTextSize(18);
+        searchView.setTextSize(20);
+        searchView.setTextColor(0xFF202020);
+        searchView.setHintTextColor(0xFF999999);
         searchView.setInputType(InputType.TYPE_CLASS_PHONE);
-        searchView.setShowSoftInputOnFocus(false);
-        searchRow.addView(searchView, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        searchView.setFocusable(false);
+        searchView.setCursorVisible(false);
+        searchView.setPadding(dp(14), 0, dp(10), 0);
+        searchView.setBackground(roundRect(0xFFEEEEEE, 12, 0, 0));
+        searchRow.addView(searchView, new LinearLayout.LayoutParams(0, dp(46), 1f));
 
         countryButton = new Button(this);
-        countryButton.setText("+" + countryCode);
+        countryButton.setText("WA +" + countryCode);
         countryButton.setAllCaps(false);
+        countryButton.setTextSize(11);
+        countryButton.setTextColor(0xFF303030);
+        countryButton.setPadding(0, 0, 0, 0);
+        countryButton.setMinHeight(0);
+        countryButton.setMinimumHeight(0);
+        countryButton.setBackground(roundRect(0xFFE5E5E5, 12, 0xFFD0D0D0, 1));
         countryButton.setOnClickListener(v -> editCountryCode());
-        searchRow.addView(countryButton, new LinearLayout.LayoutParams(dp(78), dp(48)));
-        root.addView(searchRow);
+        LinearLayout.LayoutParams countryLp = new LinearLayout.LayoutParams(dp(76), dp(46));
+        countryLp.setMargins(dp(6), 0, 0, 0);
+        searchRow.addView(countryButton, countryLp);
+        bottomPanel.addView(searchRow);
 
         LinearLayout keypad = new LinearLayout(this);
         keypad.setOrientation(LinearLayout.VERTICAL);
-        keypad.setPadding(0, dp(4), 0, dp(2));
+        keypad.setPadding(0, dp(5), 0, 0);
         addT9Row(keypad,
                 new String[]{"1", "2\nABC", "3\nDEF"},
                 new String[]{"1", "2", "3"});
@@ -107,15 +143,17 @@ public class MainActivity extends Activity {
                 new String[]{"7\nPQRS", "8\nTUV", "9\nWXYZ"},
                 new String[]{"7", "8", "9"});
 
-        LinearLayout bottom = new LinearLayout(this);
-        bottom.setOrientation(LinearLayout.HORIZONTAL);
-        Button clear = t9Button("CLEAR");
-        clear.setOnClickListener(v -> searchView.setText(""));
-        bottom.addView(clear, new LinearLayout.LayoutParams(0, dp(44), 1f));
+        LinearLayout lastRow = new LinearLayout(this);
+        lastRow.setOrientation(LinearLayout.HORIZONTAL);
 
-        Button zero = t9Button("0\n+");
+        Button clear = t9Button("Clear");
+        clear.setTextSize(13);
+        clear.setOnClickListener(v -> searchView.setText(""));
+        addKey(lastRow, clear, true);
+
+        Button zero = t9Button("0");
         zero.setOnClickListener(v -> appendT9("0"));
-        bottom.addView(zero, new LinearLayout.LayoutParams(0, dp(44), 1f));
+        addKey(lastRow, zero, true);
 
         Button back = t9Button("⌫");
         back.setTextSize(22);
@@ -124,23 +162,9 @@ public class MainActivity extends Activity {
             searchView.setText("");
             return true;
         });
-        bottom.addView(back, new LinearLayout.LayoutParams(0, dp(44), 1f));
-        keypad.addView(bottom);
-        root.addView(keypad);
-
-        statusView = new TextView(this);
-        statusView.setText("Waiting for contacts permission…");
-        statusView.setTextColor(0xFF666666);
-        statusView.setTextSize(12);
-        statusView.setPadding(0, dp(3), 0, dp(3));
-        root.addView(statusView);
-
-        ListView list = new ListView(this);
-        list.setDividerHeight(1);
-        adapter = new ContactAdapter();
-        list.setAdapter(adapter);
-        root.addView(list, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        addKey(lastRow, back, true);
+        keypad.addView(lastRow);
+        bottomPanel.addView(keypad);
 
         setContentView(root);
 
@@ -160,39 +184,46 @@ public class MainActivity extends Activity {
             final String digit = digits[i];
             Button b = t9Button(labels[i]);
             b.setOnClickListener(v -> appendT9(digit));
-            row.addView(b, new LinearLayout.LayoutParams(0, dp(44), 1f));
+            addKey(row, b, true);
         }
         keypad.addView(row);
+    }
+
+    private void addKey(LinearLayout row, Button button, boolean margin) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(52), 1f);
+        if (margin) lp.setMargins(dp(3), dp(2), dp(3), dp(2));
+        row.addView(button, lp);
     }
 
     private Button t9Button(String text) {
         Button b = new Button(this);
         b.setText(text);
         b.setAllCaps(false);
-        b.setTextSize(14);
+        b.setTextSize(17);
+        b.setTextColor(0xFF252525);
         b.setGravity(Gravity.CENTER);
         b.setMinHeight(0);
         b.setMinimumHeight(0);
         b.setPadding(0, 0, 0, 0);
+        b.setBackground(roundRect(0xFFF0F0F0, 14, 0xFFD7D7D7, 1));
         return b;
     }
 
+    private GradientDrawable roundRect(int fill, int radiusDp, int stroke, int strokeDp) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(fill);
+        d.setCornerRadius(dp(radiusDp));
+        if (strokeDp > 0) d.setStroke(dp(strokeDp), stroke);
+        return d;
+    }
+
     private void appendT9(String digit) {
-        int start = Math.max(searchView.getSelectionStart(), 0);
-        int end = Math.max(searchView.getSelectionEnd(), 0);
-        Editable text = searchView.getText();
-        text.replace(Math.min(start, end), Math.max(start, end), digit);
+        searchView.append(digit);
     }
 
     private void backspaceT9() {
         Editable text = searchView.getText();
-        int start = Math.max(searchView.getSelectionStart(), 0);
-        int end = Math.max(searchView.getSelectionEnd(), 0);
-        if (start != end) {
-            text.delete(Math.min(start, end), Math.max(start, end));
-        } else if (start > 0) {
-            text.delete(start - 1, start);
-        }
+        if (text.length() > 0) text.delete(text.length() - 1, text.length());
     }
 
     private void ensureContactsPermission() {
@@ -210,7 +241,7 @@ public class MainActivity extends Activity {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 loadContacts();
             } else {
-                statusView.setText("Contacts permission is required to show your contact list.");
+                statusView.setText("Contacts permission is required to show your contacts.");
             }
         }
     }
@@ -234,8 +265,13 @@ public class MainActivity extends Activity {
                     String name = c.getString(nameCol);
                     String number = c.getString(numberCol);
                     if (name == null || number == null || number.trim().isEmpty()) continue;
-                    String key = name + "\u0000" + number;
-                    if (seen.add(key)) allContacts.add(new ContactItem(name, number));
+
+                    String canonical = canonicalNumber(number);
+                    if (canonical.isEmpty()) continue;
+                    String key = normalizeName(name) + "\u0000" + canonical;
+                    if (seen.add(key)) {
+                        allContacts.add(new ContactItem(name.trim(), number.trim(), canonical));
+                    }
                 }
             }
         } catch (Exception e) {
@@ -249,30 +285,47 @@ public class MainActivity extends Activity {
     private void filterContacts(String query) {
         visibleContacts.clear();
         String raw = query == null ? "" : query.trim();
-        String qLower = raw.toLowerCase(Locale.ROOT);
         String qDigits = digitsOnly(raw);
-        boolean numericT9 = !raw.isEmpty() && qDigits.length() == raw.length();
 
         for (ContactItem item : allContacts) {
             boolean match;
             if (raw.isEmpty()) {
                 match = true;
-            } else if (numericT9) {
-                String numberDigits = digitsOnly(item.number);
-                String nameDigits = nameToT9(item.name);
-                match = numberDigits.contains(qDigits) || nameDigits.contains(qDigits);
             } else {
-                match = item.name.toLowerCase(Locale.ROOT).contains(qLower)
-                        || item.number.toLowerCase(Locale.ROOT).contains(qLower);
+                String nameDigits = nameToT9(item.name);
+                match = item.canonicalNumber.contains(qDigits) || nameDigits.contains(qDigits);
             }
             if (match) visibleContacts.add(item);
         }
 
         if (adapter != null) adapter.notifyDataSetChanged();
         if (statusView != null) {
-            String mode = numericT9 && !raw.isEmpty() ? " · T9" : "";
-            statusView.setText(visibleContacts.size() + " of " + allContacts.size() + " numbers" + mode);
+            if (raw.isEmpty()) {
+                statusView.setText(allContacts.size() + " unique contact numbers");
+            } else {
+                statusView.setText(visibleContacts.size() + " matches · " + allContacts.size() + " unique");
+            }
         }
+    }
+
+    private String canonicalNumber(String raw) {
+        if (raw == null) return "";
+        String trimmed = raw.trim();
+        String digits = digitsOnly(trimmed);
+        if (digits.isEmpty()) return "";
+        if (trimmed.startsWith("+")) return digits;
+        if (digits.startsWith("00") && digits.length() > 2) return digits.substring(2);
+        if (digits.startsWith("0") && digits.length() > 1) return countryCode + digits.substring(1);
+        return digits;
+    }
+
+    private static String normalizeName(String name) {
+        if (name == null) return "";
+        String normalized = Normalizer.normalize(name, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+        return normalized.replaceAll("\\s+", " ");
     }
 
     private static String nameToT9(String name) {
@@ -314,7 +367,11 @@ public class MainActivity extends Activity {
                         countryCode = value;
                         getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                                 .putString(KEY_COUNTRY_CODE, countryCode).apply();
-                        countryButton.setText("+" + countryCode);
+                        countryButton.setText("WA +" + countryCode);
+                        if (checkSelfPermission(Manifest.permission.READ_CONTACTS)
+                                == PackageManager.PERMISSION_GRANTED) {
+                            loadContacts();
+                        }
                     }
                 })
                 .show();
@@ -358,15 +415,7 @@ public class MainActivity extends Activity {
     }
 
     private String toWhatsAppNumber(String raw) {
-        if (raw == null) return "";
-        String trimmed = raw.trim();
-        boolean international = trimmed.startsWith("+");
-        String digits = digitsOnly(trimmed);
-        if (digits.isEmpty()) return "";
-        if (international) return digits;
-        if (digits.startsWith("00") && digits.length() > 2) return digits.substring(2);
-        if (digits.startsWith("0") && digits.length() > 1) return countryCode + digits.substring(1);
-        return digits;
+        return canonicalNumber(raw);
     }
 
     private static String digitsOnly(String value) {
@@ -382,7 +431,12 @@ public class MainActivity extends Activity {
         Button b = new Button(this);
         b.setText(text);
         b.setAllCaps(false);
-        b.setTextSize(13);
+        b.setTextSize(11);
+        b.setTextColor(0xFF303030);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setPadding(0, 0, 0, 0);
+        b.setBackground(roundRect(0xFFF0F0F0, 9, 0xFFDADADA, 1));
         b.setOnClickListener(listener);
         return b;
     }
@@ -395,51 +449,59 @@ public class MainActivity extends Activity {
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             ContactItem item = visibleContacts.get(position);
+
             LinearLayout row = new LinearLayout(MainActivity.this);
             row.setOrientation(LinearLayout.VERTICAL);
-            row.setPadding(dp(8), dp(7), dp(8), dp(8));
-            row.setBackgroundColor(0xFFFFFFFF);
+            row.setPadding(dp(8), dp(6), dp(8), dp(6));
+            row.setBackgroundColor(Color.WHITE);
 
             TextView name = new TextView(MainActivity.this);
             name.setText(item.name);
-            name.setTextSize(18);
+            name.setTextSize(17);
             name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             name.setTextColor(0xFF202020);
             row.addView(name);
 
             TextView number = new TextView(MainActivity.this);
             number.setText(item.number);
-            number.setTextSize(14);
+            number.setTextSize(13);
             number.setTextColor(0xFF666666);
-            number.setPadding(0, 0, 0, dp(3));
+            number.setPadding(0, 0, 0, dp(4));
             row.addView(number);
 
-            LinearLayout first = new LinearLayout(MainActivity.this);
-            first.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout actions = new LinearLayout(MainActivity.this);
+            actions.setOrientation(LinearLayout.HORIZONTAL);
+
             Button call = actionButton("Call", v -> dial(item.number));
             Button sms = actionButton("SMS", v -> sms(item.number));
-            first.addView(call, new LinearLayout.LayoutParams(0, dp(42), 1f));
-            first.addView(sms, new LinearLayout.LayoutParams(0, dp(42), 1f));
-            row.addView(first);
-
-            LinearLayout second = new LinearLayout(MainActivity.this);
-            second.setOrientation(LinearLayout.HORIZONTAL);
-            Button wa = actionButton("WhatsApp", v -> whatsapp(item.number, false));
+            Button wa = actionButton("WA", v -> whatsapp(item.number, false));
             Button waCall = actionButton("WA Call", v -> whatsapp(item.number, true));
-            second.addView(wa, new LinearLayout.LayoutParams(0, dp(42), 1f));
-            second.addView(waCall, new LinearLayout.LayoutParams(0, dp(42), 1f));
-            row.addView(second);
+
+            addAction(actions, call);
+            addAction(actions, sms);
+            addAction(actions, wa);
+            addAction(actions, waCall);
+            row.addView(actions);
 
             return row;
+        }
+
+        private void addAction(LinearLayout actions, Button b) {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(38), 1f);
+            lp.setMargins(dp(2), 0, dp(2), 0);
+            actions.addView(b, lp);
         }
     }
 
     private static final class ContactItem {
         final String name;
         final String number;
-        ContactItem(String name, String number) {
+        final String canonicalNumber;
+
+        ContactItem(String name, String number, String canonicalNumber) {
             this.name = name;
             this.number = number;
+            this.canonicalNumber = canonicalNumber;
         }
     }
 }
