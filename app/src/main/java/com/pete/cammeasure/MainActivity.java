@@ -2,201 +2,330 @@ package com.pete.cammeasure;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.opengl.GLSurfaceView;
+import android.database.Cursor;
+import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.ContactsContract;
+import android.text.Editable;
+import android.text.InputType;
+import android.text.TextWatcher;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.BaseAdapter;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.ar.core.ArCoreApk;
-import com.google.ar.core.Config;
-import com.google.ar.core.Session;
-import com.google.ar.core.exceptions.UnavailableApkTooOldException;
-import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
-import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException;
-import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
-import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
-public class MainActivity extends Activity implements ArMeasureRenderer.Listener {
-    private static final int CAMERA_PERMISSION_CODE = 1001;
+public class MainActivity extends Activity {
+    private static final int REQ_CONTACTS = 1001;
+    private static final String PREFS = "unified_contact_prefs";
+    private static final String KEY_COUNTRY_CODE = "country_code";
 
-    private GLSurfaceView arSurface;
-    private ArMeasureRenderer renderer;
-    private Session session;
-    private boolean installRequested;
-    private boolean depthSupported;
-
-    private final MeasurementEngine engine = new MeasurementEngine();
-
-    private TextView resultText;
-    private TextView instructionText;
-    private TextView depthStatusText;
-    private Button widthButton;
-    private Button heightButton;
-    private Button depthButton;
-    private Button boxButton;
-    private Button markButton;
-    private Button undoButton;
-    private Button resetButton;
-    private Button unitButton;
+    private final List<ContactItem> allContacts = new ArrayList<>();
+    private final List<ContactItem> visibleContacts = new ArrayList<>();
+    private ContactAdapter adapter;
+    private TextView statusView;
+    private EditText searchView;
+    private Button countryButton;
+    private String countryCode = "27";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-
-        resultText = findViewById(R.id.resultText);
-        instructionText = findViewById(R.id.instructionText);
-        depthStatusText = findViewById(R.id.depthStatusText);
-        widthButton = findViewById(R.id.widthButton);
-        heightButton = findViewById(R.id.heightButton);
-        depthButton = findViewById(R.id.depthButton);
-        boxButton = findViewById(R.id.boxButton);
-        markButton = findViewById(R.id.markButton);
-        undoButton = findViewById(R.id.undoButton);
-        resetButton = findViewById(R.id.resetButton);
-        unitButton = findViewById(R.id.unitButton);
-
-        arSurface = findViewById(R.id.arSurface);
-        arSurface.setEGLContextClientVersion(2);
-        arSurface.setPreserveEGLContextOnPause(true);
-        renderer = new ArMeasureRenderer(this, this);
-        arSurface.setRenderer(renderer);
-        // GLSurfaceView requires setRenderer() before setRenderMode(). Calling
-        // these in the opposite order crashes the activity during startup.
-        arSurface.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
-
-        widthButton.setOnClickListener(v -> selectMode(MeasurementEngine.Mode.WIDTH));
-        heightButton.setOnClickListener(v -> selectMode(MeasurementEngine.Mode.HEIGHT));
-        depthButton.setOnClickListener(v -> selectMode(MeasurementEngine.Mode.DEPTH));
-        boxButton.setOnClickListener(v -> selectMode(MeasurementEngine.Mode.BOX));
-        markButton.setOnClickListener(v -> renderer.requestCapture());
-        undoButton.setOnClickListener(v -> { engine.undo(); updateUi(); });
-        resetButton.setOnClickListener(v -> { engine.reset(); updateUi(); });
-        unitButton.setOnClickListener(v -> { engine.cycleUnit(); updateUi(); });
-
-        selectMode(MeasurementEngine.Mode.WIDTH);
+        countryCode = getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getString(KEY_COUNTRY_CODE, "27");
+        buildUi();
+        ensureContactsPermission();
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (!hasCameraPermission()) {
-            requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_CODE);
-            return;
-        }
-        startArSession();
-    }
+    private void buildUi() {
+        int pad = dp(12);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(pad, pad, pad, pad);
+        root.setBackgroundColor(0xFFF7F7F7);
 
-    private void startArSession() {
-        try {
-            if (session == null) {
-                ArCoreApk.InstallStatus status = ArCoreApk.getInstance().requestInstall(this, !installRequested);
-                if (status == ArCoreApk.InstallStatus.INSTALL_REQUESTED) {
-                    installRequested = true;
-                    return;
-                }
+        TextView title = new TextView(this);
+        title.setText("Unified Contact");
+        title.setTextSize(26);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setTextColor(0xFF202020);
+        root.addView(title);
 
-                session = new Session(this);
-                Config config = session.getConfig();
-                config.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL);
-                depthSupported = session.isDepthModeSupported(Config.DepthMode.AUTOMATIC);
-                if (depthSupported) config.setDepthMode(Config.DepthMode.AUTOMATIC);
-                session.configure(config);
-                renderer.setSession(session);
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Call, SMS and WhatsApp from one contact list");
+        subtitle.setTextSize(14);
+        subtitle.setTextColor(0xFF666666);
+        subtitle.setPadding(0, 0, 0, dp(8));
+        root.addView(subtitle);
+
+        LinearLayout searchRow = new LinearLayout(this);
+        searchRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        searchView = new EditText(this);
+        searchView.setSingleLine(true);
+        searchView.setHint("Search contacts or numbers");
+        searchView.setTextSize(16);
+        searchRow.addView(searchView, new LinearLayout.LayoutParams(0, dp(50), 1f));
+
+        countryButton = new Button(this);
+        countryButton.setText("+" + countryCode);
+        countryButton.setAllCaps(false);
+        countryButton.setOnClickListener(v -> editCountryCode());
+        searchRow.addView(countryButton, new LinearLayout.LayoutParams(dp(82), dp(50)));
+        root.addView(searchRow);
+
+        statusView = new TextView(this);
+        statusView.setText("Waiting for contacts permission…");
+        statusView.setTextColor(0xFF666666);
+        statusView.setPadding(0, dp(6), 0, dp(6));
+        root.addView(statusView);
+
+        ListView list = new ListView(this);
+        list.setDividerHeight(1);
+        adapter = new ContactAdapter();
+        list.setAdapter(adapter);
+        root.addView(list, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        setContentView(root);
+
+        searchView.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterContacts(s.toString());
             }
-
-            session.resume();
-            arSurface.onResume();
-            depthStatusText.setText(depthSupported
-                    ? "AR depth: ON — depth points preferred"
-                    : "AR depth: unavailable — using planes/feature points");
-        } catch (UnavailableArcoreNotInstalledException | UnavailableUserDeclinedInstallationException e) {
-            showFatal("Google Play Services for AR is required.");
-        } catch (UnavailableApkTooOldException e) {
-            showFatal("Google Play Services for AR needs an update.");
-        } catch (UnavailableSdkTooOldException e) {
-            showFatal("This CamMeasure build needs to be updated.");
-        } catch (UnavailableDeviceNotCompatibleException e) {
-            showFatal("This device is not compatible with ARCore.");
-        } catch (Exception e) {
-            showFatal("Unable to start AR: " + e.getMessage());
-        }
+            @Override public void afterTextChanged(Editable s) {}
+        });
     }
 
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if (session != null) {
-            arSurface.onPause();
-            session.pause();
+    private void ensureContactsPermission() {
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+            loadContacts();
+        } else {
+            requestPermissions(new String[]{Manifest.permission.READ_CONTACTS}, REQ_CONTACTS);
         }
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (session != null) {
-            session.close();
-            session = null;
-        }
-        super.onDestroy();
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == CAMERA_PERMISSION_CODE) {
+        if (requestCode == REQ_CONTACTS) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startArSession();
+                loadContacts();
             } else {
-                showFatal("Camera permission is required to measure objects.");
+                statusView.setText("Contacts permission is required to show your contact list.");
             }
         }
     }
 
-    @Override
-    public void onPointCaptured(MeasurementEngine.Point3 point, String source) {
-        runOnUiThread(() -> {
-            engine.addPoint(point);
-            updateUi();
-            Toast.makeText(this, "Point captured using " + source, Toast.LENGTH_SHORT).show();
-        });
+    private void loadContacts() {
+        allContacts.clear();
+        Set<String> seen = new HashSet<>();
+        String[] projection = {
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+        };
+
+        try (Cursor c = getContentResolver().query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                projection, null, null,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " COLLATE NOCASE ASC")) {
+            if (c != null) {
+                int nameCol = c.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
+                int numberCol = c.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER);
+                while (c.moveToNext()) {
+                    String name = c.getString(nameCol);
+                    String number = c.getString(numberCol);
+                    if (name == null || number == null || number.trim().isEmpty()) continue;
+                    String key = name + "\u0000" + number;
+                    if (seen.add(key)) allContacts.add(new ContactItem(name, number));
+                }
+            }
+        } catch (Exception e) {
+            statusView.setText("Could not read contacts: " + e.getMessage());
+            return;
+        }
+
+        filterContacts(searchView.getText().toString());
     }
 
-    @Override
-    public void onPointCaptureFailed(String reason) {
-        runOnUiThread(() -> Toast.makeText(this, reason, Toast.LENGTH_LONG).show());
+    private void filterContacts(String query) {
+        visibleContacts.clear();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        for (ContactItem item : allContacts) {
+            if (q.isEmpty()
+                    || item.name.toLowerCase(Locale.ROOT).contains(q)
+                    || item.number.toLowerCase(Locale.ROOT).contains(q)) {
+                visibleContacts.add(item);
+            }
+        }
+        if (adapter != null) adapter.notifyDataSetChanged();
+        if (statusView != null) {
+            statusView.setText(visibleContacts.size() + " of " + allContacts.size() + " numbers");
+        }
     }
 
-    private void selectMode(MeasurementEngine.Mode mode) {
-        engine.setMode(mode);
-        updateModeButtons();
-        updateUi();
+    private void editCountryCode() {
+        EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_PHONE);
+        input.setText(countryCode);
+        input.setSelection(input.length());
+        input.setHint("27");
+
+        new AlertDialog.Builder(this)
+                .setTitle("Default WhatsApp country code")
+                .setMessage("Used for local numbers beginning with 0. South Africa = 27")
+                .setView(input)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save", (d, which) -> {
+                    String value = digitsOnly(input.getText().toString());
+                    if (!value.isEmpty()) {
+                        countryCode = value;
+                        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                                .putString(KEY_COUNTRY_CODE, countryCode).apply();
+                        countryButton.setText("+" + countryCode);
+                    }
+                })
+                .show();
     }
 
-    private void updateUi() {
-        resultText.setText(engine.resultText());
-        instructionText.setText(engine.instruction());
-        unitButton.setText(engine.unitButtonLabel());
-        undoButton.setEnabled(engine.getPointCount() > 0);
-        resetButton.setEnabled(engine.getPointCount() > 0);
+    private void dial(String number) {
+        startActivity(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number))));
     }
 
-    private void updateModeButtons() {
-        widthButton.setAlpha(engine.getMode() == MeasurementEngine.Mode.WIDTH ? 1.0f : 0.65f);
-        heightButton.setAlpha(engine.getMode() == MeasurementEngine.Mode.HEIGHT ? 1.0f : 0.65f);
-        depthButton.setAlpha(engine.getMode() == MeasurementEngine.Mode.DEPTH ? 1.0f : 0.65f);
-        boxButton.setAlpha(engine.getMode() == MeasurementEngine.Mode.BOX ? 1.0f : 0.65f);
+    private void sms(String number) {
+        startActivity(new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(number))));
     }
 
-    private boolean hasCameraPermission() {
-        return checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+    private void whatsapp(String number, boolean callHint) {
+        String waNumber = toWhatsAppNumber(number);
+        if (waNumber.isEmpty()) {
+            Toast.makeText(this, "Could not convert this number for WhatsApp", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Uri uri = Uri.parse("https://wa.me/" + waNumber);
+        Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+        try {
+            intent.setPackage("com.whatsapp");
+            startActivity(intent);
+        } catch (ActivityNotFoundException e) {
+            try {
+                intent.setPackage("com.whatsapp.w4b");
+                startActivity(intent);
+            } catch (ActivityNotFoundException e2) {
+                intent.setPackage(null);
+                startActivity(intent);
+            }
+        }
+
+        if (callHint) {
+            Toast.makeText(this,
+                    "WhatsApp opens the contact; tap the phone icon to call.",
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
-    private void showFatal(String message) {
-        depthStatusText.setText(message);
-        markButton.setEnabled(false);
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    private String toWhatsAppNumber(String raw) {
+        if (raw == null) return "";
+        String trimmed = raw.trim();
+        boolean international = trimmed.startsWith("+");
+        String digits = digitsOnly(trimmed);
+        if (digits.isEmpty()) return "";
+        if (international) return digits;
+        if (digits.startsWith("00") && digits.length() > 2) return digits.substring(2);
+        if (digits.startsWith("0") && digits.length() > 1) return countryCode + digits.substring(1);
+        return digits;
+    }
+
+    private static String digitsOnly(String value) {
+        if (value == null) return "";
+        return value.replaceAll("[^0-9]", "");
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private Button actionButton(String text, View.OnClickListener listener) {
+        Button b = new Button(this);
+        b.setText(text);
+        b.setAllCaps(false);
+        b.setTextSize(13);
+        b.setOnClickListener(listener);
+        return b;
+    }
+
+    private final class ContactAdapter extends BaseAdapter {
+        @Override public int getCount() { return visibleContacts.size(); }
+        @Override public Object getItem(int position) { return visibleContacts.get(position); }
+        @Override public long getItemId(int position) { return position; }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            ContactItem item = visibleContacts.get(position);
+            LinearLayout row = new LinearLayout(MainActivity.this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(dp(8), dp(8), dp(8), dp(10));
+            row.setBackgroundColor(0xFFFFFFFF);
+
+            TextView name = new TextView(MainActivity.this);
+            name.setText(item.name);
+            name.setTextSize(18);
+            name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            name.setTextColor(0xFF202020);
+            row.addView(name);
+
+            TextView number = new TextView(MainActivity.this);
+            number.setText(item.number);
+            number.setTextSize(14);
+            number.setTextColor(0xFF666666);
+            number.setPadding(0, 0, 0, dp(4));
+            row.addView(number);
+
+            LinearLayout first = new LinearLayout(MainActivity.this);
+            first.setOrientation(LinearLayout.HORIZONTAL);
+            Button call = actionButton("Call", v -> dial(item.number));
+            Button sms = actionButton("SMS", v -> sms(item.number));
+            first.addView(call, new LinearLayout.LayoutParams(0, dp(46), 1f));
+            first.addView(sms, new LinearLayout.LayoutParams(0, dp(46), 1f));
+            row.addView(first);
+
+            LinearLayout second = new LinearLayout(MainActivity.this);
+            second.setOrientation(LinearLayout.HORIZONTAL);
+            Button wa = actionButton("WhatsApp", v -> whatsapp(item.number, false));
+            Button waCall = actionButton("WA Call", v -> whatsapp(item.number, true));
+            second.addView(wa, new LinearLayout.LayoutParams(0, dp(46), 1f));
+            second.addView(waCall, new LinearLayout.LayoutParams(0, dp(46), 1f));
+            row.addView(second);
+
+            return row;
+        }
+    }
+
+    private static final class ContactItem {
+        final String name;
+        final String number;
+        ContactItem(String name, String number) {
+            this.name = name;
+            this.number = number;
+        }
     }
 }
