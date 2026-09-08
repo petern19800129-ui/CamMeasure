@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.Build;
@@ -59,9 +60,7 @@ public class MainActivity extends Activity {
         for (int i = 0; i < timers.length; i++) {
             timers[i] = new TimerController(i, savedInstanceState);
             LinearLayout.LayoutParams panelLp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    0,
-                    1f);
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
             panelLp.setMargins(0, 0, 0, i == 0 ? dp(6) : 0);
             root.addView(timers[i].panel, panelLp);
         }
@@ -128,12 +127,25 @@ public class MainActivity extends Activity {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
-    private GradientDrawable cardBackground() {
+    private GradientDrawable roundedBackground(int color, int radiusDp) {
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.WHITE);
-        bg.setCornerRadius(dp(16));
+        bg.setColor(color);
+        bg.setCornerRadius(dp(radiusDp));
+        return bg;
+    }
+
+    private GradientDrawable cardBackground() {
+        GradientDrawable bg = roundedBackground(Color.WHITE, 16);
         bg.setStroke(dp(1), Color.rgb(220, 220, 220));
         return bg;
+    }
+
+    private StateListDrawable actionBackground(int normal, int pressed, int disabled) {
+        StateListDrawable states = new StateListDrawable();
+        states.addState(new int[]{-android.R.attr.state_enabled}, roundedBackground(disabled, 8));
+        states.addState(new int[]{android.R.attr.state_pressed}, roundedBackground(pressed, 8));
+        states.addState(new int[]{}, roundedBackground(normal, 8));
+        return states;
     }
 
     private class TimerController {
@@ -219,9 +231,7 @@ public class MainActivity extends Activity {
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             title.setTextColor(Color.rgb(30, 30, 30));
             header.addView(title, new LinearLayout.LayoutParams(
-                    0,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    1f));
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
             status = new TextView(MainActivity.this);
             status.setText(running ? "Running" : "Ready");
@@ -237,8 +247,7 @@ public class MainActivity extends Activity {
             display.setGravity(Gravity.CENTER);
             display.setPadding(0, dp(2), 0, dp(3));
             panel.addView(display, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    dp(58)));
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(58)));
 
             LinearLayout presetHeader = new LinearLayout(MainActivity.this);
             presetHeader.setOrientation(LinearLayout.HORIZONTAL);
@@ -250,9 +259,7 @@ public class MainActivity extends Activity {
             presetTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             presetTitle.setTextColor(Color.rgb(50, 50, 50));
             presetHeader.addView(presetTitle, new LinearLayout.LayoutParams(
-                    0,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    1f));
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
             editButton = new Button(MainActivity.this);
             editButton.setText("Edit");
@@ -264,10 +271,8 @@ public class MainActivity extends Activity {
             editButton.setOnClickListener(v -> showEditPresetsDialog());
             presetHeader.addView(editButton, new LinearLayout.LayoutParams(dp(64), dp(36)));
 
-            LinearLayout.LayoutParams presetHeaderLp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    dp(38));
-            panel.addView(presetHeader, presetHeaderLp);
+            panel.addView(presetHeader, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
 
             for (int row = 0; row < 2; row++) {
                 LinearLayout rowLayout = new LinearLayout(MainActivity.this);
@@ -285,9 +290,7 @@ public class MainActivity extends Activity {
                     presetButtons[presetIndex] = button;
 
                     LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(
-                            0,
-                            dp(45),
-                            1f);
+                            0, dp(45), 1f);
                     if (col == 0) {
                         buttonLp.setMargins(0, 0, dp(3), dp(3));
                     } else {
@@ -297,8 +300,7 @@ public class MainActivity extends Activity {
                 }
 
                 panel.addView(rowLayout, new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        dp(48)));
+                        ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
             }
 
             LinearLayout controls = new LinearLayout(MainActivity.this);
@@ -308,8 +310,13 @@ public class MainActivity extends Activity {
             startButton.setText("Start");
             startButton.setAllCaps(false);
             startButton.setTextSize(13);
+            startButton.setTextColor(Color.WHITE);
             startButton.setMinHeight(0);
             startButton.setMinWidth(0);
+            startButton.setBackground(actionBackground(
+                    Color.rgb(46, 125, 50),
+                    Color.rgb(27, 94, 32),
+                    Color.rgb(165, 214, 167)));
             startButton.setOnClickListener(v -> start());
 
             pauseButton = new Button(MainActivity.this);
@@ -324,8 +331,13 @@ public class MainActivity extends Activity {
             resetButton.setText("Reset");
             resetButton.setAllCaps(false);
             resetButton.setTextSize(13);
+            resetButton.setTextColor(Color.WHITE);
             resetButton.setMinHeight(0);
             resetButton.setMinWidth(0);
+            resetButton.setBackground(actionBackground(
+                    Color.rgb(198, 40, 40),
+                    Color.rgb(183, 28, 28),
+                    Color.rgb(239, 154, 154)));
             resetButton.setOnClickListener(v -> reset());
 
             controls.addView(startButton, controlParams(true, false));
@@ -333,8 +345,7 @@ public class MainActivity extends Activity {
             controls.addView(resetButton, controlParams(false, true));
 
             LinearLayout.LayoutParams controlsLp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    dp(44));
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(44));
             controlsLp.setMargins(0, dp(2), 0, 0);
             panel.addView(controls, controlsLp);
 
@@ -491,8 +502,7 @@ public class MainActivity extends Activity {
                 field.setInputType(InputType.TYPE_CLASS_TEXT);
                 fields[i] = field;
                 form.addView(field, new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        dp(46)));
+                        ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
             }
 
             AlertDialog dialog = new AlertDialog.Builder(MainActivity.this)
