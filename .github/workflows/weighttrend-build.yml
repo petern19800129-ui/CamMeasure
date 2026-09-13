@@ -5,7 +5,7 @@ on:
     branches:
       - weighttrend-build-20260913
     paths:
-      - 'weighttrend_build/**'
+      - 'weighttrend_build/source-v0.2.zip.b64'
       - '.github/workflows/weighttrend-build.yml'
   workflow_dispatch:
 
@@ -34,14 +34,13 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Reconstruct and patch Weight Trend project
+      - name: Reconstruct Weight Trend v0.2 project
         shell: bash
         run: |
-          cat weighttrend_build/source.part1 weighttrend_build/source.part2 weighttrend_build/source.part3 weighttrend_build/source.part4 | base64 --decode > /tmp/weighttrend-src.zip
-          echo '72b9e8bdbfabacfa35c4787dc373c2e2fcf6f5ba04462a7fda4b2109e3775cbb  /tmp/weighttrend-src.zip' | sha256sum --check
+          base64 --decode weighttrend_build/source-v0.2.zip.b64 > /tmp/weighttrend-v0.2-source.zip
+          echo '620b0d659c26f878e55ef69c0ec4bc87dac29388fa9b10446a20fe33fe9904db  /tmp/weighttrend-v0.2-source.zip' | sha256sum --check
           mkdir -p weighttrend_src
-          unzip -q /tmp/weighttrend-src.zip -d weighttrend_src
-          sed -i 's/setMinimumHeight(dp(300))/setMinimumHeight((int) dp(300))/' weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
+          unzip -q /tmp/weighttrend-v0.2-source.zip -d weighttrend_src
 
       - name: Build debug APK
         working-directory: weighttrend_src
@@ -50,7 +49,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: WeightTrend-debug-apk
+          name: WeightTrend-v0.2-debug-apk
           path: weighttrend_src/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
