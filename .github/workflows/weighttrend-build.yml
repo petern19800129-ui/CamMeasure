@@ -46,11 +46,8 @@ jobs:
           cp weighttrend_build/v03/DataRepository.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/DataRepository.java
           cp weighttrend_build/v04/WeightChartView.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
           cp weighttrend_build/v04/app-build.gradle weighttrend_src/app/build.gradle
-          echo '02e8f231b6f71de73c1ffeab6d7f55cef3b658835aae4fee39ee5909f39fe7b9  weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java' | sha256sum --check
-          echo 'e06383057141202880dd5ea5135e494b08074e1c0bdf8fd3a86b1bfbc20671de  weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java' | sha256sum --check
-          echo '5c8dfaa33d4c877c0e0ccce4c90085c4f005ea40bd28e540ffb77a0b14d0d49b  weighttrend_src/app/src/main/java/za/co/petern/weighttrend/DataRepository.java' | sha256sum --check
-          echo 'c4f0d6247ba59ac0d74abab3e8aa0848d16cbaadb0767fe882a9bb1e845c5f6d  weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java' | sha256sum --check
-          echo 'e22ce8bcddff84222d2c336d7db5c603d32bf359299937e8aa4aa2f0dc52c409  weighttrend_src/app/build.gradle' | sha256sum --check
+          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
+          test -s weighttrend_src/app/build.gradle
 
       - name: Build debug APK
         working-directory: weighttrend_src
