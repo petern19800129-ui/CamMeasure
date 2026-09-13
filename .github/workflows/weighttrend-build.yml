@@ -5,7 +5,7 @@ on:
     branches:
       - weighttrend-build-20260913
     paths:
-      - 'weighttrend_build/v02/**'
+      - 'weighttrend_build/v03/**'
       - '.github/workflows/weighttrend-build.yml'
   workflow_dispatch:
 
@@ -34,7 +34,7 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Reconstruct proven source and apply v0.2 prediction files
+      - name: Reconstruct proven source and apply v0.3 morning filter
         shell: bash
         run: |
           cat weighttrend_build/source.part1 weighttrend_build/source.part2 weighttrend_build/source.part3 weighttrend_build/source.part4 | base64 --decode > /tmp/weighttrend-base.zip
@@ -45,10 +45,13 @@ jobs:
           cp weighttrend_build/v02/WeightChartView.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
           cp weighttrend_build/v02/MainActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java
           cp weighttrend_build/v02/app-build.gradle weighttrend_src/app/build.gradle
+          cp weighttrend_build/v03/DataRepository.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/DataRepository.java
+          cp weighttrend_build/v03/app-build.gradle weighttrend_src/app/build.gradle
           echo '02e8f231b6f71de73c1ffeab6d7f55cef3b658835aae4fee39ee5909f39fe7b9  weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java' | sha256sum --check
           echo '7adf3105c77c8a267f1441b4896da5bbd099cbc4f59d61e7274c2772c2797563  weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java' | sha256sum --check
           echo 'e06383057141202880dd5ea5135e494b08074e1c0bdf8fd3a86b1bfbc20671de  weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java' | sha256sum --check
-          echo '50dbf13c21691b94027517e06695f092c07124cc15fbc67b3a07eb833414fa2d  weighttrend_src/app/build.gradle' | sha256sum --check
+          echo '5c8dfaa33d4c877c0e0ccce4c90085c4f005ea40bd28e540ffb77a0b14d0d49b  weighttrend_src/app/src/main/java/za/co/petern/weighttrend/DataRepository.java' | sha256sum --check
+          echo 'ef1b4d86fc5bc0dad95e128ba63de5795f68d86f12344a8e89498a50a6505647  weighttrend_src/app/build.gradle' | sha256sum --check
 
       - name: Build debug APK
         working-directory: weighttrend_src
@@ -57,7 +60,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: WeightTrend-v0.2-debug-apk
+          name: WeightTrend-v0.3-debug-apk
           path: weighttrend_src/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
