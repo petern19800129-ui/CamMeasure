@@ -1,0 +1,55 @@
+name: Build Weight Trend APK
+
+on:
+  push:
+    branches:
+      - weighttrend-build-20260913
+    paths:
+      - 'weighttrend_build/**'
+      - '.github/workflows/weighttrend-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout temporary build branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Set up Gradle 9.6
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Reconstruct Weight Trend project
+        shell: bash
+        run: |
+          cat weighttrend_build/source.part1 weighttrend_build/source.part2 weighttrend_build/source.part3 weighttrend_build/source.part4 | base64 --decode > /tmp/weighttrend-src.zip
+          echo '72b9e8bdbfabacfa35c4787dc373c2e2fcf6f5ba04462a7fda4b2109e3775cbb  /tmp/weighttrend-src.zip' | sha256sum --check
+          mkdir -p weighttrend_src
+          unzip -q /tmp/weighttrend-src.zip -d weighttrend_src
+
+      - name: Build debug APK
+        working-directory: weighttrend_src
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeightTrend-debug-apk
+          path: weighttrend_src/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
