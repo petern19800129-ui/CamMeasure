@@ -34,13 +34,14 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Reconstruct Weight Trend project
+      - name: Reconstruct and patch Weight Trend project
         shell: bash
         run: |
           cat weighttrend_build/source.part1 weighttrend_build/source.part2 weighttrend_build/source.part3 weighttrend_build/source.part4 | base64 --decode > /tmp/weighttrend-src.zip
           echo '72b9e8bdbfabacfa35c4787dc373c2e2fcf6f5ba04462a7fda4b2109e3775cbb  /tmp/weighttrend-src.zip' | sha256sum --check
           mkdir -p weighttrend_src
           unzip -q /tmp/weighttrend-src.zip -d weighttrend_src
+          sed -i 's/setMinimumHeight(dp(300))/setMinimumHeight((int) dp(300))/' weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
 
       - name: Build debug APK
         working-directory: weighttrend_src
