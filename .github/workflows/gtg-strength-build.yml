@@ -38,28 +38,37 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Reconstruct, patch, and extract GTG project
+      - name: Reconstruct and update GTG project
         run: |
           rm -rf gtg-build/project gtg-build/GTGStrength-reconstructed.zip
           cat gtg-build/zip.b64.part00 gtg-build/zip.b64.part01 gtg-build/zip.b64.part02 gtg-build/zip.b64.part03 gtg-build/zip.b64.part04 | base64 -d > gtg-build/GTGStrength-reconstructed.zip
           unzip -t gtg-build/GTGStrength-reconstructed.zip
           mkdir -p gtg-build/project
           unzip -q gtg-build/GTGStrength-reconstructed.zip -d gtg-build/project
+
+          # Keep the project on the stable API-36-compatible toolchain.
           sed -i 's/compileSdk = 37/compileSdk = 36/' gtg-build/project/GTGStrength/app/build.gradle.kts
           sed -i 's/compose-bom:2026.08.00/compose-bom:2026.06.00/g' gtg-build/project/GTGStrength/app/build.gradle.kts
           sed -i '/import androidx.compose.foundation.layout.weight/d' gtg-build/project/GTGStrength/app/src/main/java/com/petern/gtgstrength/ui/TrainingLogScreen.kt
+
+          # Overlay the updated settings/view-model/dashboard/app sources.
+          cp -a gtg-build/overlay/app/src/main/java/. gtg-build/project/GTGStrength/app/src/main/java/
+
+          # Training Log only needs its two progress targets updated.
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('gtg-build/project/GTGStrength/app/src/main/java/com/petern/gtgstrength/ui/GtgApp.kt')
+          p = Path('gtg-build/project/GTGStrength/app/src/main/java/com/petern/gtgstrength/ui/TrainingLogScreen.kt')
           s = p.read_text()
-          needle = '@Composable\nfun GtgApp(viewModel: GtgViewModel) {'
-          replacement = '@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)\n@Composable\nfun GtgApp(viewModel: GtgViewModel) {'
-          if needle not in s:
-              raise SystemExit('GtgApp patch target not found')
-          p.write_text(s.replace(needle, replacement, 1))
+          old = 'target = uiState.settings.targetSetsPerExercise'
+          if s.count(old) != 2:
+              raise SystemExit(f'Expected 2 legacy Training Log targets, found {s.count(old)}')
+          s = s.replace(old, 'target = uiState.settings.deadliftTargetSets', 1)
+          s = s.replace(old, 'target = uiState.settings.rdlTargetSets', 1)
+          p.write_text(s)
           PY
-          grep -n "compileSdk\|targetSdk\|compose-bom" gtg-build/project/GTGStrength/app/build.gradle.kts
-          grep -n "OptIn\|fun GtgApp" gtg-build/project/GTGStrength/app/src/main/java/com/petern/gtgstrength/ui/GtgApp.kt
+
+          grep -RIn 'targetSetsPerExercise\|settings.repsPerSet\|setTargetSets\|setRepsPerSet' gtg-build/project/GTGStrength/app/src/main && exit 1 || true
+          grep -n "deadliftTargetSets\|rdlTargetSets" gtg-build/project/GTGStrength/app/src/main/java/com/petern/gtgstrength/ui/TrainingLogScreen.kt
 
       - name: Run unit tests
         working-directory: gtg-build/project/GTGStrength
@@ -72,7 +81,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GTGStrength-debug-apk
+          name: GTGStrength-independent-volume-apk
           path: gtg-build/project/GTGStrength/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
