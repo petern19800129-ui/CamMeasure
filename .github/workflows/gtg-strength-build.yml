@@ -1,0 +1,63 @@
+name: Build GTG Strength APK
+
+on:
+  push:
+    branches: [gtg-apk-build]
+    paths:
+      - '.github/workflows/gtg-strength-build.yml'
+      - 'gtg-build/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK platform
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-37" "build-tools;37.0.0"
+
+      - name: Set up Gradle 9.6
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Extract GTG project
+        run: |
+          rm -rf gtg-build/project
+          mkdir -p gtg-build/project
+          unzip -q gtg-build/GTGStrength-AndroidStudio.zip -d gtg-build/project
+          ls -la gtg-build/project
+
+      - name: Run unit tests
+        working-directory: gtg-build/project/GTGStrength
+        run: gradle --stacktrace testDebugUnitTest
+
+      - name: Build debug APK
+        working-directory: gtg-build/project/GTGStrength
+        run: gradle --stacktrace assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTGStrength-debug-apk
+          path: gtg-build/project/GTGStrength/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
