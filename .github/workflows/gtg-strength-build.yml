@@ -32,7 +32,7 @@ jobs:
       - name: Install Android SDK platform
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-37" "build-tools;37.0.0"
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle 9.6
         uses: gradle/actions/setup-gradle@v4
@@ -44,7 +44,8 @@ jobs:
           rm -rf gtg-build/project
           mkdir -p gtg-build/project
           unzip -q gtg-build/GTGStrength-AndroidStudio.zip -d gtg-build/project
-          ls -la gtg-build/project
+          sed -i 's/compileSdk = 37/compileSdk = 36/' gtg-build/project/GTGStrength/app/build.gradle.kts
+          grep -n "compileSdk\|targetSdk" gtg-build/project/GTGStrength/app/build.gradle.kts
 
       - name: Run unit tests
         working-directory: gtg-build/project/GTGStrength
