@@ -46,7 +46,8 @@ jobs:
           mkdir -p gtg-build/project
           unzip -q gtg-build/GTGStrength-reconstructed.zip -d gtg-build/project
           sed -i 's/compileSdk = 37/compileSdk = 36/' gtg-build/project/GTGStrength/app/build.gradle.kts
-          grep -n "compileSdk\|targetSdk" gtg-build/project/GTGStrength/app/build.gradle.kts
+          sed -i 's/compose-bom:2026.08.00/compose-bom:2026.06.00/g' gtg-build/project/GTGStrength/app/build.gradle.kts
+          grep -n "compileSdk\|targetSdk\|compose-bom" gtg-build/project/GTGStrength/app/build.gradle.kts
 
       - name: Run unit tests
         working-directory: gtg-build/project/GTGStrength
