@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -18,11 +19,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.petern.gtgstrength.domain.Exercise
 
 private enum class AppScreen(val label: String) {
     DASHBOARD("Dashboard"),
-    LOG("Training Log")
+    LOG("Training Log"),
+    DATA("Backup")
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -37,10 +38,10 @@ fun GtgApp(viewModel: GtgViewModel) {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        if (screen == AppScreen.DASHBOARD) {
-                            "GTG Strength"
-                        } else {
-                            "Training Log"
+                        when (screen) {
+                            AppScreen.DASHBOARD -> "GTG Strength"
+                            AppScreen.LOG -> "Training Log"
+                            AppScreen.DATA -> "Backup & Data"
                         }
                     )
                 }
@@ -59,6 +60,12 @@ fun GtgApp(viewModel: GtgViewModel) {
                     onClick = { screen = AppScreen.LOG },
                     icon = { Icon(Icons.Outlined.History, contentDescription = null) },
                     label = { Text(AppScreen.LOG.label) }
+                )
+                NavigationBarItem(
+                    selected = screen == AppScreen.DATA,
+                    onClick = { screen = AppScreen.DATA },
+                    icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
+                    label = { Text(AppScreen.DATA.label) }
                 )
             }
         }
@@ -82,6 +89,14 @@ fun GtgApp(viewModel: GtgViewModel) {
                 modifier = Modifier.padding(innerPadding),
                 onUpdateLog = viewModel::updateLog,
                 onDeleteLog = viewModel::deleteLog
+            )
+
+            AppScreen.DATA -> BackupScreen(
+                uiState = uiState,
+                modifier = Modifier.padding(innerPadding),
+                createBackupJson = viewModel::createBackupJson,
+                onRestoreBackup = viewModel::restoreBackupJson,
+                onRebuildProgress = viewModel::rebuildProgress
             )
         }
     }
