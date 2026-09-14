@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -54,6 +55,10 @@ fun DashboardScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        QuickLogSection(uiState = uiState, onQuickLog = onQuickLog)
+
+        WeeklyProgressSection(uiState)
+
         Text(
             text = "Grease the groove with fresh, submaximal sets spread through the day.",
             style = MaterialTheme.typography.bodyLarge
@@ -106,32 +111,6 @@ fun DashboardScreen(
             }
         }
 
-        Text(
-            text = "Quick log",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-
-        Button(
-            onClick = { onQuickLog(Exercise.DEADLIFT) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                "+1 Deadlift set  •  ${uiState.deadliftTarget.repsPerSet} reps @ " +
-                    "${formatKg(uiState.deadliftTarget.workingWeightKg)} kg"
-            )
-        }
-
-        Button(
-            onClick = { onQuickLog(Exercise.RDL) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                "+1 RDL set  •  ${uiState.rdlTarget.repsPerSet} reps @ " +
-                    "${formatKg(uiState.rdlTarget.workingWeightKg)} kg"
-            )
-        }
-
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -146,6 +125,134 @@ fun DashboardScreen(
         }
 
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun QuickLogSection(
+    uiState: GtgUiState,
+    onQuickLog: (Exercise) -> Unit
+) {
+    Text(
+        text = "Quick log",
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold
+    )
+
+    Button(
+        onClick = { onQuickLog(Exercise.DEADLIFT) },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            "+1 Deadlift set  •  ${uiState.deadliftTarget.repsPerSet} reps @ " +
+                "${formatKg(uiState.deadliftTarget.workingWeightKg)} kg"
+        )
+    }
+
+    Button(
+        onClick = { onQuickLog(Exercise.RDL) },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            "+1 RDL set  •  ${uiState.rdlTarget.repsPerSet} reps @ " +
+                "${formatKg(uiState.rdlTarget.workingWeightKg)} kg"
+        )
+    }
+
+    Text(
+        text = "Today: ${uiState.deadliftSetsToday}/${uiState.settings.deadliftTargetSets} Deadlift sets • " +
+            "${uiState.rdlSetsToday}/${uiState.settings.rdlTargetSets} RDL sets",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun WeeklyProgressSection(uiState: GtgUiState) {
+    Text(
+        text = "Weekly progress",
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold
+    )
+
+    WeekProgressCard(
+        title = "This week",
+        stats = uiState.thisWeek,
+        deadliftTargetSets = uiState.settings.deadliftTargetSets * 7,
+        rdlTargetSets = uiState.settings.rdlTargetSets * 7
+    )
+
+    WeekProgressCard(
+        title = "Last week",
+        stats = uiState.lastWeek,
+        deadliftTargetSets = uiState.settings.deadliftTargetSets * 7,
+        rdlTargetSets = uiState.settings.rdlTargetSets * 7
+    )
+}
+
+@Composable
+private fun WeekProgressCard(
+    title: String,
+    stats: WeekStats,
+    deadliftTargetSets: Int,
+    rdlTargetSets: Int
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            WeekExerciseProgress(
+                name = "Deadlift",
+                stats = stats.deadlift,
+                targetSets = deadliftTargetSets
+            )
+            WeekExerciseProgress(
+                name = "RDL",
+                stats = stats.rdl,
+                targetSets = rdlTargetSets
+            )
+
+            Text(
+                text = "Total: ${stats.totalSets} sets • ${stats.totalReps} reps • ${formatKg(stats.totalTonnageKg)} kg",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeekExerciseProgress(
+    name: String,
+    stats: ExerciseWeekStats,
+    targetSets: Int
+) {
+    val progress = if (targetSets <= 0) 0f else (stats.sets.toFloat() / targetSets).coerceIn(0f, 1f)
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(name, fontWeight = FontWeight.SemiBold)
+            Text("${stats.sets} / $targetSets sets")
+        }
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = "${stats.reps} reps • ${formatKg(stats.tonnageKg)} kg",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
