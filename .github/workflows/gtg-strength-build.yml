@@ -5,7 +5,6 @@ on:
     branches: [gtg-apk-build]
     paths:
       - '.github/workflows/gtg-strength-build.yml'
-      - 'gtg-build/**'
   workflow_dispatch:
 
 permissions:
@@ -39,11 +38,13 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Extract GTG project
+      - name: Reconstruct and extract GTG project
         run: |
-          rm -rf gtg-build/project
+          rm -rf gtg-build/project gtg-build/GTGStrength-reconstructed.zip
+          cat gtg-build/zip.b64.part00 gtg-build/zip.b64.part01 gtg-build/zip.b64.part02 gtg-build/zip.b64.part03 gtg-build/zip.b64.part04 | base64 -d > gtg-build/GTGStrength-reconstructed.zip
+          unzip -t gtg-build/GTGStrength-reconstructed.zip
           mkdir -p gtg-build/project
-          unzip -q gtg-build/GTGStrength-AndroidStudio.zip -d gtg-build/project
+          unzip -q gtg-build/GTGStrength-reconstructed.zip -d gtg-build/project
           sed -i 's/compileSdk = 37/compileSdk = 36/' gtg-build/project/GTGStrength/app/build.gradle.kts
           grep -n "compileSdk\|targetSdk" gtg-build/project/GTGStrength/app/build.gradle.kts
 
