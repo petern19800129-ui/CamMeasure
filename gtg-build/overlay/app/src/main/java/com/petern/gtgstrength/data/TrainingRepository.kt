@@ -35,12 +35,4 @@ class TrainingRepository(
     suspend fun delete(log: TrainingLogEntity) {
         dao.delete(log)
     }
-
-    /** Replace all saved training history with a decoded backup. */
-    suspend fun replaceAll(logs: List<TrainingLogEntity>) {
-        dao.deleteAll()
-        if (logs.isNotEmpty()) {
-            dao.insertAll(logs.map { it.copy(id = 0) })
-        }
-    }
 }
