@@ -3,7 +3,6 @@ package com.petern.gtgstrength.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.petern.gtgstrength.data.BackupCodec
 import com.petern.gtgstrength.data.SettingsRepository
 import com.petern.gtgstrength.data.TrainingLogEntity
 import com.petern.gtgstrength.data.TrainingRepository
@@ -15,6 +14,8 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -60,8 +61,6 @@ class GtgViewModel(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    // Re-emits every minute so date/week summaries roll over correctly even
-    // when the app stays open and no database row changes.
     private val dateRefresh = flow {
         while (true) {
             emit(Unit)
@@ -69,7 +68,6 @@ class GtgViewModel(
         }
     }
 
-    // Allows the user to explicitly rebuild all derived progress summaries.
     private val manualRefresh = MutableStateFlow(0L)
 
     val uiState = combine(
@@ -151,7 +149,7 @@ class GtgViewModel(
 
     /**
      * Logs the set immediately and returns the exact inserted row to the UI.
-     * The UI can then offer a 3-second Cancel action that deletes only this row.
+     * The UI uses that row for the 3-second Cancel/undo action.
      */
     fun quickLog(
         exercise: Exercise,
@@ -173,11 +171,7 @@ class GtgViewModel(
         }
     }
 
-    fun updateLog(
-        log: TrainingLogEntity,
-        reps: Int,
-        weightKg: Double
-    ) {
+    fun updateLog(log: TrainingLogEntity, reps: Int, weightKg: Double) {
         viewModelScope.launch {
             trainingRepository.update(
                 log.copy(
@@ -189,24 +183,84 @@ class GtgViewModel(
     }
 
     fun deleteLog(log: TrainingLogEntity) {
-        viewModelScope.launch {
-            trainingRepository.delete(log)
-        }
+        viewModelScope.launch { trainingRepository.delete(log) }
     }
 
-    fun createBackupJson(): String = BackupCodec.encode(
-        settings = uiState.value.settings,
-        logs = uiState.value.logs
-    )
+    fun createBackupJson(): String {
+        val state = uiState.value
+        val settings = state.settings
+        val root = JSONObject()
+            .put("app", "GTG Strength")
+            .put("version", 1)
+            .put("exportedAt", System.currentTimeMillis())
+            .put(
+                "settings",
+                JSONObject()
+                    .put("deadliftOneRmKg", settings.deadliftOneRmKg.toDouble())
+                    .put("rdlOneRmKg", settings.rdlOneRmKg.toDouble())
+                    .put("intensityPercent", settings.intensityPercent.toDouble())
+                    .put("deadliftTargetSets", settings.deadliftTargetSets)
+                    .put("deadliftRepsPerSet", settings.deadliftRepsPerSet)
+                    .put("rdlTargetSets", settings.rdlTargetSets)
+                    .put("rdlRepsPerSet", settings.rdlRepsPerSet)
+            )
+
+        val logArray = JSONArray()
+        state.logs.sortedBy { it.timestamp }.forEach { log ->
+            logArray.put(
+                JSONObject()
+                    .put("exercise", log.exercise)
+                    .put("reps", log.reps)
+                    .put("weightKg", log.weightKg)
+                    .put("timestamp", log.timestamp)
+            )
+        }
+        root.put("logs", logArray)
+        return root.toString(2)
+    }
 
     fun restoreBackupJson(json: String, onResult: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                val backup = BackupCodec.decode(json)
-                settingsRepository.replaceSettings(backup.settings)
-                trainingRepository.replaceAll(backup.logs)
+                val root = JSONObject(json)
+                require(root.optInt("version", -1) == 1) { "Unsupported backup version" }
+                val settings = root.getJSONObject("settings")
+
+                settingsRepository.setDeadliftOneRmKg(settings.optDouble("deadliftOneRmKg", 70.0).toFloat())
+                settingsRepository.setRdlOneRmKg(settings.optDouble("rdlOneRmKg", 50.0).toFloat())
+                settingsRepository.setIntensityPercent(settings.optDouble("intensityPercent", 60.0).toFloat())
+                settingsRepository.setDeadliftTargetSets(settings.optInt("deadliftTargetSets", 5))
+                settingsRepository.setDeadliftRepsPerSet(settings.optInt("deadliftRepsPerSet", 4))
+                settingsRepository.setRdlTargetSets(settings.optInt("rdlTargetSets", 5))
+                settingsRepository.setRdlRepsPerSet(settings.optInt("rdlRepsPerSet", 4))
+
+                uiState.value.logs.forEach { trainingRepository.delete(it) }
+
+                val logs = root.optJSONArray("logs") ?: JSONArray()
+                var restoredCount = 0
+                for (index in 0 until logs.length()) {
+                    val item = logs.optJSONObject(index) ?: continue
+                    val exercise = when (item.optString("exercise")) {
+                        Exercise.DEADLIFT.storedName -> Exercise.DEADLIFT
+                        Exercise.RDL.storedName -> Exercise.RDL
+                        else -> continue
+                    }
+                    val reps = item.optInt("reps", 0)
+                    val weight = item.optDouble("weightKg", -1.0)
+                    val timestamp = item.optLong("timestamp", 0L)
+                    if (reps <= 0 || weight < 0.0 || timestamp <= 0L) continue
+
+                    trainingRepository.logSet(
+                        exercise = exercise,
+                        reps = reps.coerceAtMost(100),
+                        weightKg = weight.coerceAtMost(2000.0),
+                        timestamp = timestamp
+                    )
+                    restoredCount += 1
+                }
+
                 manualRefresh.value += 1
-                onResult("Backup restored: ${backup.logs.size} saved sets loaded.")
+                onResult("Backup restored: $restoredCount saved sets loaded.")
             } catch (error: Exception) {
                 onResult("Restore failed: ${error.message ?: "invalid backup file"}")
             }
