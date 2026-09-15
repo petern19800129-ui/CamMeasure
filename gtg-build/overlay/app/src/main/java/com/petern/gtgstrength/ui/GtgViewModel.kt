@@ -50,13 +50,13 @@ data class WeekDayProgress(
     val isToday: Boolean
 ) {
     val isComplete: Boolean
-        get() = deadliftSets >= plan.deadlift.sets && rdlSets >= plan.rdl.sets
+        get() = plan.isRestDay || (deadliftSets >= plan.deadlift.sets && rdlSets >= plan.rdl.sets)
 }
 
 data class GtgUiState(
     val settings: TrainingSettings = TrainingSettings(),
-    val todayPlan: DayPlan = TrainingSettings().weeklyProgram.forDay(DayOfWeek.MONDAY),
-    val todayDate: LocalDate = LocalDate.of(2000, 1, 3),
+    val todayPlan: DayPlan = TrainingSettings().weeklyProgram.forDay(DayOfWeek.SUNDAY),
+    val todayDate: LocalDate = LocalDate.of(2000, 1, 2),
     val deadliftSetsToday: Int = 0,
     val rdlSetsToday: Int = 0,
     val deadliftRepsToday: Int = 0,
@@ -99,7 +99,7 @@ class GtgViewModel(
         val todayPlan = settings.weeklyProgram.forDay(today.dayOfWeek)
         val todayLogs = logsForDate(logs, today, zone)
 
-        val startOfThisWeekDate = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val startOfThisWeekDate = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
         val startOfLastWeekDate = startOfThisWeekDate.minusWeeks(1)
         val startOfNextWeekDate = startOfThisWeekDate.plusWeeks(1)
 
@@ -187,8 +187,9 @@ class GtgViewModel(
             Exercise.DEADLIFT -> uiState.value.todayPlan.deadlift
             Exercise.RDL -> uiState.value.todayPlan.rdl
         }
-        val safeWeight = weightKg.coerceIn(0.0, 2000.0)
+        if (plan.sets <= 0 || plan.reps <= 0) return
 
+        val safeWeight = weightKg.coerceIn(0.0, 2000.0)
         viewModelScope.launch {
             val logged = trainingRepository.logSet(
                 exercise = exercise,
