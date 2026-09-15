@@ -39,8 +39,40 @@ fun DashboardScreen(
 ) {
     val deadliftPlan = uiState.todayPlan.deadlift
     val rdlPlan = uiState.todayPlan.rdl
-    val equipment = uiState.settings.barbellEquipment
 
+    if (uiState.todayPlan.isRestDay) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text("Quick log", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "TODAY · ${uiState.todayDate.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()).uppercase()}",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Rest day", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Saturday is your planned day off. No Deadlift or RDL sets are scheduled today.")
+                    Text(
+                        "Your next training week starts Sunday.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        return
+    }
+
+    val equipment = uiState.settings.barbellEquipment
     var deadliftWeight by remember(deadliftPlan.minWeightKg, deadliftPlan.maxWeightKg, uiState.todayDate) {
         mutableStateOf(deadliftPlan.minWeightKg)
     }
