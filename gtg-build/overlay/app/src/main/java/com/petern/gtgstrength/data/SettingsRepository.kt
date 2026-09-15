@@ -27,7 +27,8 @@ data class TrainingSettings(
     val deadliftRepsPerSet: Int = 4,
     val rdlTargetSets: Int = 5,
     val rdlRepsPerSet: Int = 4,
-    val weeklyProgram: WeeklyProgram = WeeklyProgram.default()
+    val weeklyProgram: WeeklyProgram = WeeklyProgram.default(),
+    val barbellEquipment: BarbellEquipment = BarbellEquipment.default()
 )
 
 class SettingsRepository(
@@ -46,6 +47,7 @@ class SettingsRepository(
         val rdlRepsPerSet = intPreferencesKey("rdl_reps_per_set")
 
         val weeklyProgram = stringPreferencesKey("weekly_program_v1")
+        val barbellEquipment = stringPreferencesKey("barbell_equipment_v1")
     }
 
     val settings: Flow<TrainingSettings> = context.trainingSettingsDataStore.data
@@ -81,6 +83,12 @@ class SettingsRepository(
     suspend fun updateDayPlan(dayPlan: DayPlan) {
         val current = settings.first().weeklyProgram
         setWeeklyProgram(current.replacing(dayPlan))
+    }
+
+    suspend fun setBarbellEquipment(equipment: BarbellEquipment) {
+        context.trainingSettingsDataStore.edit {
+            it[Keys.barbellEquipment] = BarbellEquipmentCodec.encode(equipment)
+        }
     }
 
     // Legacy setters remain so old backup files can still be restored safely.
@@ -119,7 +127,8 @@ class SettingsRepository(
             deadliftRepsPerSet = preferences[Keys.deadliftRepsPerSet] ?: legacyReps,
             rdlTargetSets = preferences[Keys.rdlTargetSets] ?: legacySets,
             rdlRepsPerSet = preferences[Keys.rdlRepsPerSet] ?: legacyReps,
-            weeklyProgram = WeeklyProgramCodec.decode(preferences[Keys.weeklyProgram])
+            weeklyProgram = WeeklyProgramCodec.decode(preferences[Keys.weeklyProgram]),
+            barbellEquipment = BarbellEquipmentCodec.decode(preferences[Keys.barbellEquipment])
         )
     }
 }
