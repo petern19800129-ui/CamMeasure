@@ -48,26 +48,21 @@ fun GtgApp(viewModel: GtgViewModel) {
     var quickLogPopupJob by remember { mutableStateOf<Job?>(null) }
 
     fun showQuickLogPopup(log: TrainingLogEntity) {
-        // Only the newest quick-log entry keeps an active Cancel window.
         quickLogPopupJob?.cancel()
         snackbarHostState.currentSnackbarData?.dismiss()
-
         quickLogPopupJob = scope.launch {
             val exerciseName = Exercise.fromStoredName(log.exercise).displayName
             val result = withTimeoutOrNull(3_000L) {
                 snackbarHostState.showSnackbar(
-                    message = "$exerciseName logged • ${log.reps} reps @ ${formatKg(log.weightKg)} kg",
+                    message = "$exerciseName logged · ${log.reps} reps @ ${formatKg(log.weightKg)} kg",
                     actionLabel = "Cancel",
                     withDismissAction = false,
                     duration = SnackbarDuration.Indefinite
                 )
             }
-
             if (result == SnackbarResult.ActionPerformed) {
-                // Delete only the exact row that was created by this tap.
                 viewModel.deleteLog(log)
             } else if (result == null) {
-                // The 3-second confirmation window expired normally.
                 snackbarHostState.currentSnackbarData?.dismiss()
             }
         }
@@ -123,15 +118,8 @@ fun GtgApp(viewModel: GtgViewModel) {
             AppScreen.DASHBOARD -> DashboardScreen(
                 uiState = uiState,
                 modifier = Modifier.padding(innerPadding),
-                onDeadliftOneRmChange = viewModel::setDeadliftOneRm,
-                onRdlOneRmChange = viewModel::setRdlOneRm,
-                onIntensityChange = viewModel::setIntensity,
-                onDeadliftTargetSetsChange = viewModel::setDeadliftTargetSets,
-                onDeadliftRepsChange = viewModel::setDeadliftRepsPerSet,
-                onRdlTargetSetsChange = viewModel::setRdlTargetSets,
-                onRdlRepsChange = viewModel::setRdlRepsPerSet,
-                onQuickLog = { exercise ->
-                    viewModel.quickLog(exercise, ::showQuickLogPopup)
+                onQuickLog = { exercise, weight ->
+                    viewModel.quickLog(exercise, weight, ::showQuickLogPopup)
                 }
             )
 
@@ -148,10 +136,7 @@ fun GtgApp(viewModel: GtgViewModel) {
                 onDeadliftOneRmChange = viewModel::setDeadliftOneRm,
                 onRdlOneRmChange = viewModel::setRdlOneRm,
                 onIntensityChange = viewModel::setIntensity,
-                onDeadliftTargetSetsChange = viewModel::setDeadliftTargetSets,
-                onDeadliftRepsChange = viewModel::setDeadliftRepsPerSet,
-                onRdlTargetSetsChange = viewModel::setRdlTargetSets,
-                onRdlRepsChange = viewModel::setRdlRepsPerSet
+                onDayPlanChange = viewModel::updateDayPlan
             )
 
             AppScreen.DATA -> BackupScreen(
