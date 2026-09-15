@@ -91,6 +91,26 @@ class SettingsRepository(
         }
     }
 
+    /**
+     * Restore the complete settings snapshot in a single DataStore transaction.
+     * This prevents one restored section (notably bar/plate stock) from being lost
+     * between several independent preference edits.
+     */
+    suspend fun replaceSettings(value: TrainingSettings) {
+        val equipment = value.barbellEquipment.normalized()
+        context.trainingSettingsDataStore.edit { preferences ->
+            preferences[Keys.deadliftOneRmKg] = value.deadliftOneRmKg.coerceIn(0f, 1000f)
+            preferences[Keys.rdlOneRmKg] = value.rdlOneRmKg.coerceIn(0f, 1000f)
+            preferences[Keys.intensityPercent] = value.intensityPercent.coerceIn(50f, 70f)
+            preferences[Keys.deadliftTargetSets] = value.deadliftTargetSets.coerceIn(1, 20)
+            preferences[Keys.deadliftRepsPerSet] = value.deadliftRepsPerSet.coerceIn(1, 50)
+            preferences[Keys.rdlTargetSets] = value.rdlTargetSets.coerceIn(1, 20)
+            preferences[Keys.rdlRepsPerSet] = value.rdlRepsPerSet.coerceIn(1, 50)
+            preferences[Keys.weeklyProgram] = WeeklyProgramCodec.encode(value.weeklyProgram)
+            preferences[Keys.barbellEquipment] = BarbellEquipmentCodec.encode(equipment)
+        }
+    }
+
     // Legacy setters remain so old backup files can still be restored safely.
     suspend fun setDeadliftTargetSets(value: Int) {
         context.trainingSettingsDataStore.edit {
