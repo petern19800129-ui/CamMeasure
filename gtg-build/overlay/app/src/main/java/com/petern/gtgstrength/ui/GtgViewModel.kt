@@ -187,8 +187,6 @@ class GtgViewModel(
             Exercise.DEADLIFT -> uiState.value.todayPlan.deadlift
             Exercise.RDL -> uiState.value.todayPlan.rdl
         }
-        // Plate calculator may select the nearest achievable load outside a programmed
-        // range, so only clamp to a safe absolute app limit here.
         val safeWeight = weightKg.coerceIn(0.0, 2000.0)
 
         viewModelScope.launch {
@@ -221,7 +219,7 @@ class GtgViewModel(
         val settings = state.settings
         val root = JSONObject()
             .put("app", "GTG Strength")
-            .put("version", 3)
+            .put("version", 4)
             .put("exportedAt", System.currentTimeMillis())
             .put(
                 "settings",
@@ -256,28 +254,36 @@ class GtgViewModel(
             try {
                 val root = JSONObject(json)
                 val version = root.optInt("version", -1)
-                require(version in 1..3) { "Unsupported backup version" }
-                val settings = root.getJSONObject("settings")
+                require(version in 1..4) { "Unsupported backup version" }
+                val saved = root.getJSONObject("settings")
+                val current = uiState.value.settings
 
-                settingsRepository.setDeadliftOneRmKg(settings.optDouble("deadliftOneRmKg", 70.0).toFloat())
-                settingsRepository.setRdlOneRmKg(settings.optDouble("rdlOneRmKg", 50.0).toFloat())
-                settingsRepository.setIntensityPercent(settings.optDouble("intensityPercent", 60.0).toFloat())
-                settingsRepository.setDeadliftTargetSets(settings.optInt("deadliftTargetSets", 5))
-                settingsRepository.setDeadliftRepsPerSet(settings.optInt("deadliftRepsPerSet", 4))
-                settingsRepository.setRdlTargetSets(settings.optInt("rdlTargetSets", 5))
-                settingsRepository.setRdlRepsPerSet(settings.optInt("rdlRepsPerSet", 4))
-
-                if (version >= 2 && root.has("weeklyProgram")) {
-                    settingsRepository.setWeeklyProgram(
-                        WeeklyProgramCodec.decode(root.getJSONArray("weeklyProgram").toString())
-                    )
+                val restoredProgram = if (version >= 2 && root.has("weeklyProgram")) {
+                    WeeklyProgramCodec.decode(root.getJSONArray("weeklyProgram").toString())
+                } else {
+                    current.weeklyProgram
                 }
 
-                if (version >= 3 && root.has("barbellEquipment")) {
-                    settingsRepository.setBarbellEquipment(
-                        BarbellEquipmentCodec.decode(root.getJSONObject("barbellEquipment").toString())
-                    )
+                val hasEquipment = version >= 3 && root.has("barbellEquipment")
+                val restoredEquipment = if (hasEquipment) {
+                    BarbellEquipmentCodec.decode(root.getJSONObject("barbellEquipment").toString())
+                } else {
+                    current.barbellEquipment
                 }
+
+                settingsRepository.replaceSettings(
+                    TrainingSettings(
+                        deadliftOneRmKg = saved.optDouble("deadliftOneRmKg", current.deadliftOneRmKg.toDouble()).toFloat(),
+                        rdlOneRmKg = saved.optDouble("rdlOneRmKg", current.rdlOneRmKg.toDouble()).toFloat(),
+                        intensityPercent = saved.optDouble("intensityPercent", current.intensityPercent.toDouble()).toFloat(),
+                        deadliftTargetSets = saved.optInt("deadliftTargetSets", current.deadliftTargetSets),
+                        deadliftRepsPerSet = saved.optInt("deadliftRepsPerSet", current.deadliftRepsPerSet),
+                        rdlTargetSets = saved.optInt("rdlTargetSets", current.rdlTargetSets),
+                        rdlRepsPerSet = saved.optInt("rdlRepsPerSet", current.rdlRepsPerSet),
+                        weeklyProgram = restoredProgram,
+                        barbellEquipment = restoredEquipment
+                    )
+                )
 
                 uiState.value.logs.forEach { trainingRepository.delete(it) }
 
@@ -305,7 +311,8 @@ class GtgViewModel(
                 }
 
                 manualRefresh.value += 1
-                onResult("Backup restored: $restoredCount saved sets loaded.")
+                val equipmentMessage = if (hasEquipment) " Bar & plate stock restored." else ""
+                onResult("Backup restored: $restoredCount saved sets loaded.$equipmentMessage")
             } catch (error: Exception) {
                 onResult("Restore failed: ${error.message ?: "invalid backup file"}")
             }
