@@ -22,10 +22,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.petern.gtgstrength.data.PlateCalculator
+import com.petern.gtgstrength.data.PlateLoading
 import com.petern.gtgstrength.data.PlannedExercise
 import com.petern.gtgstrength.domain.Exercise
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
@@ -36,12 +39,23 @@ fun DashboardScreen(
 ) {
     val deadliftPlan = uiState.todayPlan.deadlift
     val rdlPlan = uiState.todayPlan.rdl
+    val equipment = uiState.settings.barbellEquipment
+
     var deadliftWeight by remember(deadliftPlan.minWeightKg, deadliftPlan.maxWeightKg, uiState.todayDate) {
         mutableStateOf(deadliftPlan.minWeightKg)
     }
     var rdlWeight by remember(rdlPlan.minWeightKg, rdlPlan.maxWeightKg, uiState.todayDate) {
         mutableStateOf(rdlPlan.minWeightKg)
     }
+
+    val deadliftLoading = remember(deadliftWeight, equipment) {
+        PlateCalculator.calculate(deadliftWeight, equipment)
+    }
+    val rdlLoading = remember(rdlWeight, equipment) {
+        PlateCalculator.calculate(rdlWeight, equipment)
+    }
+    val deadliftLogWeight = effectiveLogWeight(deadliftWeight, deadliftLoading)
+    val rdlLogWeight = effectiveLogWeight(rdlWeight, rdlLoading)
 
     Column(
         modifier = modifier
@@ -63,8 +77,9 @@ fun DashboardScreen(
             completed = uiState.deadliftSetsToday,
             actualTonnageKg = uiState.deadliftTonnageToday,
             selectedWeightKg = deadliftWeight,
+            loading = deadliftLoading,
             onWeightSelected = { deadliftWeight = it },
-            onLog = { onQuickLog(Exercise.DEADLIFT, deadliftWeight) }
+            onLog = { onQuickLog(Exercise.DEADLIFT, deadliftLogWeight) }
         )
 
         TodayExerciseCard(
@@ -73,8 +88,9 @@ fun DashboardScreen(
             completed = uiState.rdlSetsToday,
             actualTonnageKg = uiState.rdlTonnageToday,
             selectedWeightKg = rdlWeight,
+            loading = rdlLoading,
             onWeightSelected = { rdlWeight = it },
-            onLog = { onQuickLog(Exercise.RDL, rdlWeight) }
+            onLog = { onQuickLog(Exercise.RDL, rdlLogWeight) }
         )
 
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -86,18 +102,18 @@ fun DashboardScreen(
                 VolumeRow(
                     "Deadlift",
                     uiState.deadliftTonnageToday,
-                    deadliftPlan.sets * deadliftPlan.reps * deadliftWeight
+                    deadliftPlan.sets * deadliftPlan.reps * deadliftLogWeight
                 )
                 VolumeRow(
                     "RDL",
                     uiState.rdlTonnageToday,
-                    rdlPlan.sets * rdlPlan.reps * rdlWeight
+                    rdlPlan.sets * rdlPlan.reps * rdlLogWeight
                 )
                 VolumeRow(
                     "Total",
                     uiState.deadliftTonnageToday + uiState.rdlTonnageToday,
-                    deadliftPlan.sets * deadliftPlan.reps * deadliftWeight +
-                        rdlPlan.sets * rdlPlan.reps * rdlWeight
+                    deadliftPlan.sets * deadliftPlan.reps * deadliftLogWeight +
+                        rdlPlan.sets * rdlPlan.reps * rdlLogWeight
                 )
             }
         }
@@ -111,11 +127,13 @@ private fun TodayExerciseCard(
     completed: Int,
     actualTonnageKg: Double,
     selectedWeightKg: Double,
+    loading: PlateLoading,
     onWeightSelected: (Double) -> Unit,
     onLog: () -> Unit
 ) {
     val progress = (completed.toFloat() / plan.sets.coerceAtLeast(1)).coerceIn(0f, 1f)
     val complete = completed >= plan.sets
+    val logWeight = effectiveLogWeight(selectedWeightKg, loading)
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -140,13 +158,15 @@ private fun TodayExerciseCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     weightChoices(plan).forEach { weight ->
                         FilterChip(
-                            selected = kotlin.math.abs(selectedWeightKg - weight) < 0.01,
+                            selected = abs(selectedWeightKg - weight) < 0.01,
                             onClick = { onWeightSelected(weight) },
                             label = { Text("${formatKg(weight)} kg") }
                         )
                     }
                 }
             }
+
+            PlateLoadingSection(loading)
 
             Text(
                 "${formatKg(actualTonnageKg)} kg logged",
@@ -156,11 +176,56 @@ private fun TodayExerciseCard(
 
             Button(onClick = onLog, modifier = Modifier.fillMaxWidth()) {
                 val prefix = if (complete) "✓ Complete · + Extra set" else "+ Log set"
-                Text("$prefix · ${plan.reps} reps @ ${formatKg(selectedWeightKg)} kg")
+                Text("$prefix · ${plan.reps} reps @ ${formatKg(logWeight)} kg")
             }
         }
     }
 }
+
+@Composable
+private fun PlateLoadingSection(loading: PlateLoading) {
+    if (!loading.configured) {
+        Text(
+            "Plate calculator: add your available plates under Settings.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        return
+    }
+
+    val perSide = if (loading.platesPerSide.isEmpty()) {
+        "none — bar only"
+    } else {
+        loading.platesPerSide.joinToString(" + ") { item ->
+            if (item.countPerSide == 1) "${formatKg(item.weightKg)} kg"
+            else "${item.countPerSide}×${formatKg(item.weightKg)} kg"
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        if (!loading.exact) {
+            val sign = if (loading.differenceKg >= 0.0) "+" else ""
+            Text(
+                "Closest load: ${formatKg(loading.actualWeightKg)} kg ($sign${formatKg(loading.differenceKg)} kg)",
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            Text(
+                "Plate loading · ${formatKg(loading.actualWeightKg)} kg total",
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Text(
+            "Bar: ${formatKg(loading.barWeightKg)} kg · Plates / side: $perSide",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun effectiveLogWeight(selectedWeightKg: Double, loading: PlateLoading): Double =
+    if (loading.configured) loading.actualWeightKg else selectedWeightKg
 
 @Composable
 private fun VolumeRow(label: String, actual: Double, target: Double) {
@@ -182,10 +247,10 @@ private fun weightChoices(plan: PlannedExercise): List<Double> {
         values += value
         value += 2.5
     }
-    if (kotlin.math.abs(values.last() - plan.maxWeightKg) > 0.01) values += plan.maxWeightKg
+    if (abs(values.last() - plan.maxWeightKg) > 0.01) values += plan.maxWeightKg
     return values.distinct()
 }
 
 internal fun formatKg(value: Double): String =
-    if (kotlin.math.abs(value - value.roundToInt()) < 0.001) value.roundToInt().toString()
-    else String.format(Locale.getDefault(), "%.1f", value)
+    if (abs(value - value.roundToInt()) < 0.001) value.roundToInt().toString()
+    else String.format(Locale.getDefault(), "%.2f", value).trimEnd('0').trimEnd(',').trimEnd('.')
