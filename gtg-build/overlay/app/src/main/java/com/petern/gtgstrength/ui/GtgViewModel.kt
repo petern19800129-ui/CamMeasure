@@ -3,6 +3,8 @@ package com.petern.gtgstrength.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.petern.gtgstrength.data.BarbellEquipment
+import com.petern.gtgstrength.data.BarbellEquipmentCodec
 import com.petern.gtgstrength.data.DayPlan
 import com.petern.gtgstrength.data.SettingsRepository
 import com.petern.gtgstrength.data.TrainingLogEntity
@@ -172,6 +174,10 @@ class GtgViewModel(
         viewModelScope.launch { settingsRepository.updateDayPlan(dayPlan) }
     }
 
+    fun setBarbellEquipment(equipment: BarbellEquipment) {
+        viewModelScope.launch { settingsRepository.setBarbellEquipment(equipment) }
+    }
+
     fun quickLog(
         exercise: Exercise,
         weightKg: Double,
@@ -181,7 +187,9 @@ class GtgViewModel(
             Exercise.DEADLIFT -> uiState.value.todayPlan.deadlift
             Exercise.RDL -> uiState.value.todayPlan.rdl
         }
-        val safeWeight = weightKg.coerceIn(plan.minWeightKg, plan.maxWeightKg)
+        // Plate calculator may select the nearest achievable load outside a programmed
+        // range, so only clamp to a safe absolute app limit here.
+        val safeWeight = weightKg.coerceIn(0.0, 2000.0)
 
         viewModelScope.launch {
             val logged = trainingRepository.logSet(
@@ -213,7 +221,7 @@ class GtgViewModel(
         val settings = state.settings
         val root = JSONObject()
             .put("app", "GTG Strength")
-            .put("version", 2)
+            .put("version", 3)
             .put("exportedAt", System.currentTimeMillis())
             .put(
                 "settings",
@@ -227,6 +235,7 @@ class GtgViewModel(
                     .put("rdlRepsPerSet", settings.rdlRepsPerSet)
             )
             .put("weeklyProgram", JSONArray(WeeklyProgramCodec.encode(settings.weeklyProgram)))
+            .put("barbellEquipment", JSONObject(BarbellEquipmentCodec.encode(settings.barbellEquipment)))
 
         val logArray = JSONArray()
         state.logs.sortedBy { it.timestamp }.forEach { log ->
@@ -247,7 +256,7 @@ class GtgViewModel(
             try {
                 val root = JSONObject(json)
                 val version = root.optInt("version", -1)
-                require(version == 1 || version == 2) { "Unsupported backup version" }
+                require(version in 1..3) { "Unsupported backup version" }
                 val settings = root.getJSONObject("settings")
 
                 settingsRepository.setDeadliftOneRmKg(settings.optDouble("deadliftOneRmKg", 70.0).toFloat())
@@ -261,6 +270,12 @@ class GtgViewModel(
                 if (version >= 2 && root.has("weeklyProgram")) {
                     settingsRepository.setWeeklyProgram(
                         WeeklyProgramCodec.decode(root.getJSONArray("weeklyProgram").toString())
+                    )
+                }
+
+                if (version >= 3 && root.has("barbellEquipment")) {
+                    settingsRepository.setBarbellEquipment(
+                        BarbellEquipmentCodec.decode(root.getJSONObject("barbellEquipment").toString())
                     )
                 }
 
