@@ -3,19 +3,18 @@ package com.petern.gtgstrength.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.petern.gtgstrength.data.DayPlan
 import com.petern.gtgstrength.data.SettingsRepository
 import com.petern.gtgstrength.data.TrainingLogEntity
 import com.petern.gtgstrength.data.TrainingRepository
 import com.petern.gtgstrength.data.TrainingSettings
+import com.petern.gtgstrength.data.WeeklyProgramCodec
 import com.petern.gtgstrength.domain.Exercise
-import com.petern.gtgstrength.domain.ExerciseTarget
 import com.petern.gtgstrength.domain.TrainingCalculator
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
-import org.json.JSONArray
-import org.json.JSONObject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,6 +22,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class ExerciseWeekStats(
     val sets: Int = 0,
@@ -39,21 +40,36 @@ data class WeekStats(
     val totalTonnageKg: Double get() = deadlift.tonnageKg + rdl.tonnageKg
 }
 
+data class WeekDayProgress(
+    val date: LocalDate,
+    val plan: DayPlan,
+    val deadliftSets: Int,
+    val rdlSets: Int,
+    val isToday: Boolean
+) {
+    val isComplete: Boolean
+        get() = deadliftSets >= plan.deadlift.sets && rdlSets >= plan.rdl.sets
+}
+
 data class GtgUiState(
     val settings: TrainingSettings = TrainingSettings(),
-    val deadliftTarget: ExerciseTarget = TrainingCalculator.calculate(70f, 60f, 4, 5),
-    val rdlTarget: ExerciseTarget = TrainingCalculator.calculate(50f, 60f, 4, 5),
+    val todayPlan: DayPlan = TrainingSettings().weeklyProgram.forDay(DayOfWeek.MONDAY),
+    val todayDate: LocalDate = LocalDate.of(2000, 1, 3),
     val deadliftSetsToday: Int = 0,
     val rdlSetsToday: Int = 0,
+    val deadliftRepsToday: Int = 0,
+    val rdlRepsToday: Int = 0,
+    val deadliftTonnageToday: Double = 0.0,
+    val rdlTonnageToday: Double = 0.0,
+    val suggestedDeadliftWeightKg: Double = 42.0,
+    val suggestedRdlWeightKg: Double = 30.0,
     val thisWeek: WeekStats = WeekStats(),
     val lastWeek: WeekStats = WeekStats(),
+    val weekDays: List<WeekDayProgress> = emptyList(),
     val logs: List<TrainingLogEntity> = emptyList()
 ) {
-    val combinedDailyReps: Int
-        get() = deadliftTarget.totalReps + rdlTarget.totalReps
-
-    val combinedDailyTonnageKg: Double
-        get() = deadliftTarget.totalTonnageKg + rdlTarget.totalTonnageKg
+    val plannedWeeklyDeadliftSets: Int get() = settings.weeklyProgram.deadliftWeeklySets
+    val plannedWeeklyRdlSets: Int get() = settings.weeklyProgram.rdlWeeklySets
 }
 
 class GtgViewModel(
@@ -76,24 +92,10 @@ class GtgViewModel(
         dateRefresh,
         manualRefresh
     ) { settings, logs, _, _ ->
-        val deadliftTarget = TrainingCalculator.calculate(
-            oneRepMaxKg = settings.deadliftOneRmKg,
-            intensityPercent = settings.intensityPercent,
-            repsPerSet = settings.deadliftRepsPerSet,
-            targetSets = settings.deadliftTargetSets
-        )
-        val rdlTarget = TrainingCalculator.calculate(
-            oneRepMaxKg = settings.rdlOneRmKg,
-            intensityPercent = settings.intensityPercent,
-            repsPerSet = settings.rdlRepsPerSet,
-            targetSets = settings.rdlTargetSets
-        )
-
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
-        val startOfToday = today.atStartOfDay(zone).toInstant().toEpochMilli()
-        val startOfTomorrow = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val todayLogs = logs.filter { it.timestamp in startOfToday until startOfTomorrow }
+        val todayPlan = settings.weeklyProgram.forDay(today.dayOfWeek)
+        val todayLogs = logsForDate(logs, today, zone)
 
         val startOfThisWeekDate = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         val startOfLastWeekDate = startOfThisWeekDate.minusWeeks(1)
@@ -103,14 +105,49 @@ class GtgViewModel(
         val startOfLastWeek = startOfLastWeekDate.atStartOfDay(zone).toInstant().toEpochMilli()
         val startOfNextWeek = startOfNextWeekDate.atStartOfDay(zone).toInstant().toEpochMilli()
 
+        val deadliftToday = todayLogs.filter { it.exercise == Exercise.DEADLIFT.storedName }
+        val rdlToday = todayLogs.filter { it.exercise == Exercise.RDL.storedName }
+
+        val suggestedDeadlift = TrainingCalculator.calculate(
+            oneRepMaxKg = settings.deadliftOneRmKg,
+            intensityPercent = settings.intensityPercent,
+            repsPerSet = 1,
+            targetSets = 1
+        ).workingWeightKg
+        val suggestedRdl = TrainingCalculator.calculate(
+            oneRepMaxKg = settings.rdlOneRmKg,
+            intensityPercent = settings.intensityPercent,
+            repsPerSet = 1,
+            targetSets = 1
+        ).workingWeightKg
+
+        val weekDays = (0L..6L).map { offset ->
+            val date = startOfThisWeekDate.plusDays(offset)
+            val dayLogs = logsForDate(logs, date, zone)
+            WeekDayProgress(
+                date = date,
+                plan = settings.weeklyProgram.forDay(date.dayOfWeek),
+                deadliftSets = dayLogs.count { it.exercise == Exercise.DEADLIFT.storedName },
+                rdlSets = dayLogs.count { it.exercise == Exercise.RDL.storedName },
+                isToday = date == today
+            )
+        }
+
         GtgUiState(
             settings = settings,
-            deadliftTarget = deadliftTarget,
-            rdlTarget = rdlTarget,
-            deadliftSetsToday = todayLogs.count { it.exercise == Exercise.DEADLIFT.storedName },
-            rdlSetsToday = todayLogs.count { it.exercise == Exercise.RDL.storedName },
+            todayPlan = todayPlan,
+            todayDate = today,
+            deadliftSetsToday = deadliftToday.size,
+            rdlSetsToday = rdlToday.size,
+            deadliftRepsToday = deadliftToday.sumOf { it.reps },
+            rdlRepsToday = rdlToday.sumOf { it.reps },
+            deadliftTonnageToday = deadliftToday.sumOf { it.reps * it.weightKg },
+            rdlTonnageToday = rdlToday.sumOf { it.reps * it.weightKg },
+            suggestedDeadliftWeightKg = suggestedDeadlift,
+            suggestedRdlWeightKg = suggestedRdl,
             thisWeek = calculateWeekStats(logs, startOfThisWeek, startOfNextWeek),
             lastWeek = calculateWeekStats(logs, startOfLastWeek, startOfThisWeek),
+            weekDays = weekDays,
             logs = logs
         )
     }.stateIn(
@@ -131,41 +168,26 @@ class GtgViewModel(
         viewModelScope.launch { settingsRepository.setIntensityPercent(value) }
     }
 
-    fun setDeadliftTargetSets(value: Int) {
-        viewModelScope.launch { settingsRepository.setDeadliftTargetSets(value) }
+    fun updateDayPlan(dayPlan: DayPlan) {
+        viewModelScope.launch { settingsRepository.updateDayPlan(dayPlan) }
     }
 
-    fun setDeadliftRepsPerSet(value: Int) {
-        viewModelScope.launch { settingsRepository.setDeadliftRepsPerSet(value) }
-    }
-
-    fun setRdlTargetSets(value: Int) {
-        viewModelScope.launch { settingsRepository.setRdlTargetSets(value) }
-    }
-
-    fun setRdlRepsPerSet(value: Int) {
-        viewModelScope.launch { settingsRepository.setRdlRepsPerSet(value) }
-    }
-
-    /**
-     * Logs the set immediately and returns the exact inserted row to the UI.
-     * The UI uses that row for the 3-second Cancel/undo action.
-     */
     fun quickLog(
         exercise: Exercise,
+        weightKg: Double,
         onLogged: (TrainingLogEntity) -> Unit
     ) {
-        val state = uiState.value
-        val target = when (exercise) {
-            Exercise.DEADLIFT -> state.deadliftTarget
-            Exercise.RDL -> state.rdlTarget
+        val plan = when (exercise) {
+            Exercise.DEADLIFT -> uiState.value.todayPlan.deadlift
+            Exercise.RDL -> uiState.value.todayPlan.rdl
         }
+        val safeWeight = weightKg.coerceIn(plan.minWeightKg, plan.maxWeightKg)
 
         viewModelScope.launch {
             val logged = trainingRepository.logSet(
                 exercise = exercise,
-                reps = target.repsPerSet,
-                weightKg = target.workingWeightKg
+                reps = plan.reps,
+                weightKg = safeWeight
             )
             onLogged(logged)
         }
@@ -191,7 +213,7 @@ class GtgViewModel(
         val settings = state.settings
         val root = JSONObject()
             .put("app", "GTG Strength")
-            .put("version", 1)
+            .put("version", 2)
             .put("exportedAt", System.currentTimeMillis())
             .put(
                 "settings",
@@ -204,6 +226,7 @@ class GtgViewModel(
                     .put("rdlTargetSets", settings.rdlTargetSets)
                     .put("rdlRepsPerSet", settings.rdlRepsPerSet)
             )
+            .put("weeklyProgram", JSONArray(WeeklyProgramCodec.encode(settings.weeklyProgram)))
 
         val logArray = JSONArray()
         state.logs.sortedBy { it.timestamp }.forEach { log ->
@@ -223,7 +246,8 @@ class GtgViewModel(
         viewModelScope.launch {
             try {
                 val root = JSONObject(json)
-                require(root.optInt("version", -1) == 1) { "Unsupported backup version" }
+                val version = root.optInt("version", -1)
+                require(version == 1 || version == 2) { "Unsupported backup version" }
                 val settings = root.getJSONObject("settings")
 
                 settingsRepository.setDeadliftOneRmKg(settings.optDouble("deadliftOneRmKg", 70.0).toFloat())
@@ -233,6 +257,12 @@ class GtgViewModel(
                 settingsRepository.setDeadliftRepsPerSet(settings.optInt("deadliftRepsPerSet", 4))
                 settingsRepository.setRdlTargetSets(settings.optInt("rdlTargetSets", 5))
                 settingsRepository.setRdlRepsPerSet(settings.optInt("rdlRepsPerSet", 4))
+
+                if (version >= 2 && root.has("weeklyProgram")) {
+                    settingsRepository.setWeeklyProgram(
+                        WeeklyProgramCodec.decode(root.getJSONArray("weeklyProgram").toString())
+                    )
+                }
 
                 uiState.value.logs.forEach { trainingRepository.delete(it) }
 
@@ -270,6 +300,16 @@ class GtgViewModel(
     fun rebuildProgress(onResult: (String) -> Unit) {
         manualRefresh.value += 1
         onResult("Progress rebuilt from ${uiState.value.logs.size} saved sets.")
+    }
+
+    private fun logsForDate(
+        logs: List<TrainingLogEntity>,
+        date: LocalDate,
+        zone: ZoneId
+    ): List<TrainingLogEntity> {
+        val start = date.atStartOfDay(zone).toInstant().toEpochMilli()
+        val end = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        return logs.filter { it.timestamp in start until end }
     }
 
     private fun calculateWeekStats(
