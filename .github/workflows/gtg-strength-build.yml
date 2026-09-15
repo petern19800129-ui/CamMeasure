@@ -51,10 +51,40 @@ jobs:
           sed -i 's/compileSdk = 37/compileSdk = 36/' gtg-build/project/GTGStrength/app/build.gradle.kts
           sed -i 's/compose-bom:2026.08.00/compose-bom:2026.06.00/g' gtg-build/project/GTGStrength/app/build.gradle.kts
 
-          # Overlay the latest GTG sources. This revision keeps the current JSON
-          # backup path and adds weekly progress in Training Log plus a 3-second
-          # Cancel window for each Quick Log entry.
+          # Overlay the latest GTG sources.
           cp -a gtg-build/overlay/app/src/main/java/. gtg-build/project/GTGStrength/app/src/main/java/
+
+          # v6 layout: move the calculator off Dashboard into Settings, remove
+          # the GTG rule card, and put Today's Progress above Weekly Progress.
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('gtg-build/project/GTGStrength/app/src/main/java/com/petern/gtgstrength/ui')
+
+          dashboard = root / 'DashboardScreen.kt'
+          s = dashboard.read_text()
+          start = s.index('        SettingsCard(\n')
+          end = s.index('        TargetCard(\n', start)
+          s = s[:start] + s[end:]
+
+          rule_marker = 'GTG rule: every rep should stay crisp.'
+          marker_pos = s.index(rule_marker)
+          card_start = s.rfind('        Card(\n', 0, marker_pos)
+          spacer_start = s.index('        Spacer(Modifier.height(8.dp))', marker_pos)
+          s = s[:card_start] + s[spacer_start:]
+          dashboard.write_text(s)
+
+          log = root / 'TrainingLogScreen.kt'
+          s = log.read_text()
+          weekly_call = '                WeeklyProgressSection(uiState)\n\n'
+          if weekly_call not in s:
+              raise SystemExit('Weekly progress call not found in TrainingLogScreen')
+          s = s.replace(weekly_call, '', 1)
+          history_marker = '                Text(\n                    text = "History",'
+          history_pos = s.index(history_marker)
+          s = s[:history_pos] + '                WeeklyProgressSection(uiState)\n\n' + s[history_pos:]
+          log.write_text(s)
+          PY
 
           grep -RIn 'targetSetsPerExercise\|settings.repsPerSet\|setTargetSets\|setRepsPerSet' gtg-build/project/GTGStrength/app/src/main && exit 1 || true
 
@@ -69,7 +99,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GTGStrength-v5-apk
+          name: GTGStrength-v6-apk
           path: gtg-build/project/GTGStrength/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
