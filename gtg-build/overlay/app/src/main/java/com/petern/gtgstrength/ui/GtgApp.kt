@@ -24,6 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.petern.gtgstrength.data.TrainingLogEntity
 import com.petern.gtgstrength.domain.Exercise
@@ -45,9 +47,14 @@ fun GtgApp(viewModel: GtgViewModel) {
     var screen by remember { mutableStateOf(AppScreen.DASHBOARD) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
     var quickLogPopupJob by remember { mutableStateOf<Job?>(null) }
 
     fun showQuickLogPopup(log: TrainingLogEntity) {
+        // This callback is invoked only after Room has successfully saved the set.
+        // Give one short tactile confirmation at that point.
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+
         quickLogPopupJob?.cancel()
         snackbarHostState.currentSnackbarData?.dismiss()
         quickLogPopupJob = scope.launch {
