@@ -14,7 +14,6 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -37,7 +36,6 @@ import com.petern.gtgstrength.domain.Exercise
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
 import java.util.Locale
 
 @Composable
@@ -74,9 +72,6 @@ fun TrainingLogScreen(
                     repsLogged = uiState.rdlRepsToday,
                     tonnageKg = uiState.rdlTonnageToday
                 )
-
-                Text("This week's plan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                uiState.weekDays.forEach { WeekPlanRow(it) }
 
                 WeeklyProgressSection(uiState)
 
@@ -144,36 +139,6 @@ private fun ProgressCard(
             if (completed >= plan.sets) {
                 Text("Daily set target reached", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
-        }
-    }
-}
-
-@Composable
-private fun WeekPlanRow(progress: WeekDayProgress) {
-    val day = progress.date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
-    val marker = when {
-        progress.isToday -> "TODAY"
-        progress.isComplete -> "✓"
-        else -> ""
-    }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = if (progress.isToday) {
-            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-        } else CardDefaults.cardColors()
-    ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(day, fontWeight = FontWeight.Bold)
-                if (marker.isNotEmpty()) Text(marker, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-            }
-            Text("Deadlift  ${progress.plan.deadlift.sets} × ${progress.plan.deadlift.reps} @ ${formatPlanWeight(progress.plan.deadlift)} kg")
-            Text("RDL       ${progress.plan.rdl.sets} × ${progress.plan.rdl.reps} @ ${formatPlanWeight(progress.plan.rdl)} kg")
-            Text(
-                "Logged: DL ${progress.deadliftSets}/${progress.plan.deadlift.sets} · RDL ${progress.rdlSets}/${progress.plan.rdl.sets}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
