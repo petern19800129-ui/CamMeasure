@@ -174,6 +174,16 @@ class GtgViewModel(
         viewModelScope.launch { settingsRepository.updateDayPlan(dayPlan) }
     }
 
+    fun increaseDeadliftProgramByFivePercent() {
+        val updated = uiState.value.settings.weeklyProgram.increaseDeadliftByPercent(5.0)
+        viewModelScope.launch { settingsRepository.setWeeklyProgram(updated) }
+    }
+
+    fun increaseRdlProgramByFivePercent() {
+        val updated = uiState.value.settings.weeklyProgram.increaseRdlByPercent(5.0)
+        viewModelScope.launch { settingsRepository.setWeeklyProgram(updated) }
+    }
+
     fun setBarbellEquipment(equipment: BarbellEquipment) {
         viewModelScope.launch { settingsRepository.setBarbellEquipment(equipment) }
     }
