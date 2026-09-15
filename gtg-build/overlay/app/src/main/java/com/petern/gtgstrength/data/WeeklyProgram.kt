@@ -11,11 +11,23 @@ data class PlannedExercise(
     val maxWeightKg: Double = minWeightKg
 ) {
     val isRange: Boolean get() = maxWeightKg > minWeightKg + 0.001
+    val isRest: Boolean get() = sets <= 0
+
     fun normalized(): PlannedExercise {
+        val safeSets = sets.coerceIn(0, 20)
+        if (safeSets == 0) {
+            return PlannedExercise(
+                sets = 0,
+                reps = 0,
+                minWeightKg = 0.0,
+                maxWeightKg = 0.0
+            )
+        }
+
         val low = minWeightKg.coerceIn(0.0, 2000.0)
         val high = maxWeightKg.coerceIn(low, 2000.0)
         return copy(
-            sets = sets.coerceIn(1, 20),
+            sets = safeSets,
             reps = reps.coerceIn(1, 50),
             minWeightKg = low,
             maxWeightKg = high
@@ -27,32 +39,62 @@ data class DayPlan(
     val dayOfWeek: DayOfWeek,
     val deadlift: PlannedExercise,
     val rdl: PlannedExercise
-)
+) {
+    val isRestDay: Boolean get() = deadlift.isRest && rdl.isRest
+}
 
 data class WeeklyProgram(val days: List<DayPlan>) {
-    fun forDay(day: DayOfWeek): DayPlan =
-        days.firstOrNull { it.dayOfWeek == day }
+    fun forDay(day: DayOfWeek): DayPlan {
+        if (day == DayOfWeek.SATURDAY) return restDay()
+        return days.firstOrNull { it.dayOfWeek == day }
             ?: default().days.first { it.dayOfWeek == day }
+    }
 
-    val deadliftWeeklySets: Int get() = days.sumOf { it.deadlift.sets }
-    val rdlWeeklySets: Int get() = days.sumOf { it.rdl.sets }
+    val orderedDays: List<DayPlan>
+        get() = WEEK_ORDER.map(::forDay)
+
+    val deadliftWeeklySets: Int get() = WEEK_ORDER.sumOf { forDay(it).deadlift.sets }
+    val rdlWeeklySets: Int get() = WEEK_ORDER.sumOf { forDay(it).rdl.sets }
 
     fun replacing(dayPlan: DayPlan): WeeklyProgram = WeeklyProgram(
-        days = DayOfWeek.entries.map { day ->
-            if (day == dayPlan.dayOfWeek) dayPlan else forDay(day)
+        days = WEEK_ORDER.map { day ->
+            when {
+                day == DayOfWeek.SATURDAY -> restDay()
+                day == dayPlan.dayOfWeek -> dayPlan.copy(
+                    deadlift = dayPlan.deadlift.normalized(),
+                    rdl = dayPlan.rdl.normalized()
+                )
+                else -> forDay(day)
+            }
         }
     )
 
     companion object {
+        val WEEK_ORDER: List<DayOfWeek> = listOf(
+            DayOfWeek.SUNDAY,
+            DayOfWeek.MONDAY,
+            DayOfWeek.TUESDAY,
+            DayOfWeek.WEDNESDAY,
+            DayOfWeek.THURSDAY,
+            DayOfWeek.FRIDAY,
+            DayOfWeek.SATURDAY
+        )
+
+        fun restDay(): DayPlan = DayPlan(
+            dayOfWeek = DayOfWeek.SATURDAY,
+            deadlift = PlannedExercise(0, 0, 0.0),
+            rdl = PlannedExercise(0, 0, 0.0)
+        )
+
         fun default(): WeeklyProgram = WeeklyProgram(
             listOf(
+                DayPlan(DayOfWeek.SUNDAY, PlannedExercise(2, 1, 30.0, 35.0), PlannedExercise(1, 8, 20.0)),
                 DayPlan(DayOfWeek.MONDAY, PlannedExercise(4, 1, 40.0), PlannedExercise(2, 6, 25.0)),
                 DayPlan(DayOfWeek.TUESDAY, PlannedExercise(3, 1, 35.0), PlannedExercise(1, 8, 25.0)),
                 DayPlan(DayOfWeek.WEDNESDAY, PlannedExercise(4, 1, 45.0), PlannedExercise(2, 6, 30.0)),
                 DayPlan(DayOfWeek.THURSDAY, PlannedExercise(3, 1, 35.0), PlannedExercise(1, 8, 20.0, 25.0)),
                 DayPlan(DayOfWeek.FRIDAY, PlannedExercise(4, 1, 40.0), PlannedExercise(2, 6, 30.0)),
-                DayPlan(DayOfWeek.SATURDAY, PlannedExercise(3, 1, 45.0), PlannedExercise(1, 6, 25.0)),
-                DayPlan(DayOfWeek.SUNDAY, PlannedExercise(2, 1, 30.0, 35.0), PlannedExercise(1, 8, 20.0))
+                restDay()
             )
         )
     }
@@ -61,7 +103,7 @@ data class WeeklyProgram(val days: List<DayPlan>) {
 object WeeklyProgramCodec {
     fun encode(program: WeeklyProgram): String {
         val array = JSONArray()
-        DayOfWeek.entries.forEach { day ->
+        WeeklyProgram.WEEK_ORDER.forEach { day ->
             val plan = program.forDay(day)
             array.put(
                 JSONObject()
@@ -83,6 +125,7 @@ object WeeklyProgramCodec {
                 val item = array.optJSONObject(i) ?: continue
                 val dayValue = item.optInt("day", 0)
                 val day = DayOfWeek.entries.firstOrNull { it.value == dayValue } ?: continue
+                if (day == DayOfWeek.SATURDAY) continue
                 val fallback = defaults.forDay(day)
                 parsed[day] = DayPlan(
                     dayOfWeek = day,
@@ -90,7 +133,12 @@ object WeeklyProgramCodec {
                     rdl = decodeExercise(item.optJSONObject("rdl"), fallback.rdl)
                 )
             }
-            WeeklyProgram(DayOfWeek.entries.map { parsed[it] ?: defaults.forDay(it) })
+            WeeklyProgram(
+                WeeklyProgram.WEEK_ORDER.map { day ->
+                    if (day == DayOfWeek.SATURDAY) WeeklyProgram.restDay()
+                    else parsed[day] ?: defaults.forDay(day)
+                }
+            )
         } catch (_: Exception) {
             WeeklyProgram.default()
         }
