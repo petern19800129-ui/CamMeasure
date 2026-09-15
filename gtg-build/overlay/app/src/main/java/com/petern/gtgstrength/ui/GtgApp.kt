@@ -51,8 +51,6 @@ fun GtgApp(viewModel: GtgViewModel) {
     var quickLogPopupJob by remember { mutableStateOf<Job?>(null) }
 
     fun showQuickLogPopup(log: TrainingLogEntity) {
-        // This callback is invoked only after Room has successfully saved the set.
-        // Give one short tactile confirmation at that point.
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
 
         quickLogPopupJob?.cancel()
@@ -144,6 +142,8 @@ fun GtgApp(viewModel: GtgViewModel) {
                 onRdlOneRmChange = viewModel::setRdlOneRm,
                 onIntensityChange = viewModel::setIntensity,
                 onDayPlanChange = viewModel::updateDayPlan,
+                onDeadliftIncreaseFive = viewModel::increaseDeadliftProgramByFivePercent,
+                onRdlIncreaseFive = viewModel::increaseRdlProgramByFivePercent,
                 onEquipmentChange = viewModel::setBarbellEquipment
             )
 
