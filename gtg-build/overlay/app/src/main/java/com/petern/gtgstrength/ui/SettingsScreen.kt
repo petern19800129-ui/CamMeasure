@@ -3,9 +3,11 @@ package com.petern.gtgstrength.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -28,8 +30,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.petern.gtgstrength.data.BarbellEquipment
 import com.petern.gtgstrength.data.DayPlan
 import com.petern.gtgstrength.data.PlannedExercise
+import com.petern.gtgstrength.data.PlateStock
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -41,9 +45,11 @@ fun SettingsScreen(
     onDeadliftOneRmChange: (Float) -> Unit,
     onRdlOneRmChange: (Float) -> Unit,
     onIntensityChange: (Float) -> Unit,
-    onDayPlanChange: (DayPlan) -> Unit
+    onDayPlanChange: (DayPlan) -> Unit,
+    onEquipmentChange: (BarbellEquipment) -> Unit
 ) {
     var editingDay by remember { mutableStateOf<DayPlan?>(null) }
+    var editingEquipment by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -66,6 +72,11 @@ fun SettingsScreen(
                 }
             }
         }
+
+        EquipmentCard(
+            equipment = uiState.settings.barbellEquipment,
+            onEdit = { editingEquipment = true }
+        )
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -100,6 +111,181 @@ fun SettingsScreen(
             }
         )
     }
+
+    if (editingEquipment) {
+        EquipmentDialog(
+            equipment = uiState.settings.barbellEquipment,
+            onDismiss = { editingEquipment = false },
+            onSave = {
+                onEquipmentChange(it)
+                editingEquipment = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun EquipmentCard(
+    equipment: BarbellEquipment,
+    onEdit: () -> Unit
+) {
+    val stocked = equipment.plates.filter { it.count > 0 }.sortedByDescending { it.weightKg }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Bar & plates", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                OutlinedButton(onClick = onEdit) { Text("Edit") }
+            }
+            Text("Bar: ${formatKg(equipment.barWeightKg)} kg", fontWeight = FontWeight.SemiBold)
+
+            if (stocked.isEmpty()) {
+                Text(
+                    "No plate stock entered yet.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                stocked.forEach { plate ->
+                    Text("${formatKg(plate.weightKg)} kg × ${plate.count}")
+                }
+            }
+
+            Text(
+                "Enter total individual plate quantities. The calculator only uses matched left/right pairs.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private data class EquipmentRow(
+    val id: Int,
+    val weight: String,
+    val count: String
+)
+
+@Composable
+private fun EquipmentDialog(
+    equipment: BarbellEquipment,
+    onDismiss: () -> Unit,
+    onSave: (BarbellEquipment) -> Unit
+) {
+    var barText by remember(equipment) { mutableStateOf(formatKg(equipment.barWeightKg)) }
+    var nextId by remember(equipment) { mutableStateOf(equipment.plates.size) }
+    var rows by remember(equipment) {
+        mutableStateOf(
+            equipment.plates.mapIndexed { index, plate ->
+                EquipmentRow(index, formatKg(plate.weightKg), plate.count.toString())
+            }
+        )
+    }
+
+    val barWeight = barText.replace(',', '.').toDoubleOrNull()
+    val parsedPlates = rows.mapNotNull { row ->
+        val weight = row.weight.replace(',', '.').toDoubleOrNull() ?: return@mapNotNull null
+        val count = row.count.toIntOrNull() ?: return@mapNotNull null
+        if (weight <= 0.0 || weight > 100.0 || count !in 0..100) return@mapNotNull null
+        PlateStock(weightKg = weight, count = count)
+    }
+    val canSave = barWeight != null && barWeight in 0.1..100.0 && parsedPlates.size == rows.size
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Bar & plate stock") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = barText,
+                    onValueChange = { barText = it.take(7) },
+                    label = { Text("Bar weight") },
+                    suffix = { Text("kg") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+
+                Text("Plates in stock", fontWeight = FontWeight.Bold)
+                Text(
+                    "Quantity = total plates, not pairs.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                rows.forEach { row ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = row.weight,
+                                onValueChange = { value ->
+                                    rows = rows.map {
+                                        if (it.id == row.id) it.copy(weight = value.take(7)) else it
+                                    }
+                                },
+                                label = { Text("Plate kg") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            OutlinedTextField(
+                                value = row.count,
+                                onValueChange = { value ->
+                                    rows = rows.map {
+                                        if (it.id == row.id) it.copy(count = value.filter(Char::isDigit).take(3)) else it
+                                    }
+                                },
+                                label = { Text("Qty") },
+                                singleLine = true,
+                                modifier = Modifier.weight(0.65f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+                        }
+                        TextButton(
+                            onClick = { rows = rows.filterNot { it.id == row.id } }
+                        ) {
+                            Text("Remove ${row.weight.ifBlank { "plate" }} kg row")
+                        }
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        rows = rows + EquipmentRow(nextId, "", "0")
+                        nextId += 1
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("+ Add plate size")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = canSave,
+                onClick = {
+                    onSave(
+                        BarbellEquipment(
+                            barWeightKg = barWeight!!,
+                            plates = parsedPlates
+                        ).normalized()
+                    )
+                }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable
