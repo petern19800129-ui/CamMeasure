@@ -148,12 +148,15 @@ object PlateCalculator {
             }
         }
 
-        val perSide = bestCounts.mapIndexedNotNull { index, count ->
-            if (count <= 0) null
-            else PlateLoadItem(
-                weightKg = usable[index].first.weightKg,
-                countPerSide = count
-            )
+        val perSide = mutableListOf<PlateLoadItem>()
+        for (index in bestCounts.indices) {
+            val count = bestCounts[index]
+            if (count > 0) {
+                perSide += PlateLoadItem(
+                    weightKg = usable[index].first.weightKg,
+                    countPerSide = count
+                )
+            }
         }
 
         val actual = bar + 2.0 * (bestSum.toDouble() / SCALE)
