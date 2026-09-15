@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -39,6 +40,11 @@ import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
+private enum class ProgressionTarget {
+    DEADLIFT,
+    RDL
+}
+
 @Composable
 fun SettingsScreen(
     uiState: GtgUiState,
@@ -47,10 +53,13 @@ fun SettingsScreen(
     onRdlOneRmChange: (Float) -> Unit,
     onIntensityChange: (Float) -> Unit,
     onDayPlanChange: (DayPlan) -> Unit,
+    onDeadliftIncreaseFive: () -> Unit,
+    onRdlIncreaseFive: () -> Unit,
     onEquipmentChange: (BarbellEquipment) -> Unit
 ) {
     var editingDay by remember { mutableStateOf<DayPlan?>(null) }
     var editingEquipment by remember { mutableStateOf(false) }
+    var pendingProgression by remember { mutableStateOf<ProgressionTarget?>(null) }
 
     Column(
         modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -62,6 +71,32 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Weekly progression", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "Increase one exercise across every programmed workout Sunday–Friday. Sets, reps and Saturday rest stay unchanged.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = { pendingProgression = ProgressionTarget.DEADLIFT },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Deadlift +5%")
+                }
+                Button(
+                    onClick = { pendingProgression = ProgressionTarget.RDL },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("RDL +5%")
+                }
+            }
+        }
 
         uiState.settings.weeklyProgram.orderedDays.forEach { dayPlan ->
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -137,6 +172,35 @@ fun SettingsScreen(
             onSave = {
                 onEquipmentChange(it)
                 editingEquipment = false
+            }
+        )
+    }
+
+    pendingProgression?.let { target ->
+        val exerciseName = if (target == ProgressionTarget.DEADLIFT) "Deadlift" else "RDL"
+        AlertDialog(
+            onDismissRequest = { pendingProgression = null },
+            title = { Text("Increase $exerciseName by 5%?") },
+            text = {
+                Text(
+                    "Every programmed $exerciseName weight from Sunday through Friday will be multiplied by 1.05 and rounded to 0.01 kg. Weight ranges keep both their minimum and maximum. Sets, reps and Saturday rest day will not change. The plate calculator will still show the nearest load you can build."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (target == ProgressionTarget.DEADLIFT) onDeadliftIncreaseFive()
+                        else onRdlIncreaseFive()
+                        pendingProgression = null
+                    }
+                ) {
+                    Text("Apply +5%")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingProgression = null }) {
+                    Text("Cancel")
+                }
             }
         )
     }
