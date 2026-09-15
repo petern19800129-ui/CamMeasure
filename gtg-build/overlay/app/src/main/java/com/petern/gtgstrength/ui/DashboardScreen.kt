@@ -3,34 +3,28 @@ package com.petern.gtgstrength.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.petern.gtgstrength.data.PlannedExercise
 import com.petern.gtgstrength.domain.Exercise
-import com.petern.gtgstrength.domain.ExerciseTarget
+import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -38,15 +32,17 @@ import kotlin.math.roundToInt
 fun DashboardScreen(
     uiState: GtgUiState,
     modifier: Modifier = Modifier,
-    onDeadliftOneRmChange: (Float) -> Unit,
-    onRdlOneRmChange: (Float) -> Unit,
-    onIntensityChange: (Float) -> Unit,
-    onDeadliftTargetSetsChange: (Int) -> Unit,
-    onDeadliftRepsChange: (Int) -> Unit,
-    onRdlTargetSetsChange: (Int) -> Unit,
-    onRdlRepsChange: (Int) -> Unit,
-    onQuickLog: (Exercise) -> Unit
+    onQuickLog: (Exercise, Double) -> Unit
 ) {
+    val deadliftPlan = uiState.todayPlan.deadlift
+    val rdlPlan = uiState.todayPlan.rdl
+    var deadliftWeight by remember(deadliftPlan.minWeightKg, deadliftPlan.maxWeightKg, uiState.todayDate) {
+        mutableStateOf(deadliftPlan.minWeightKg)
+    }
+    var rdlWeight by remember(rdlPlan.minWeightKg, rdlPlan.maxWeightKg, uiState.todayDate) {
+        mutableStateOf(rdlPlan.minWeightKg)
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -54,311 +50,142 @@ fun DashboardScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        QuickLogSection(uiState = uiState, onQuickLog = onQuickLog)
-
+        Text("Quick log", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(
-            text = "Grease the groove with fresh, submaximal sets spread through the day.",
-            style = MaterialTheme.typography.bodyLarge
+            "TODAY · ${uiState.todayDate.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()).uppercase()}",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
         )
 
-        SettingsCard(
-            deadliftOneRm = uiState.settings.deadliftOneRmKg,
-            rdlOneRm = uiState.settings.rdlOneRmKg,
-            intensity = uiState.settings.intensityPercent,
-            deadliftTargetSets = uiState.settings.deadliftTargetSets,
-            deadliftReps = uiState.settings.deadliftRepsPerSet,
-            rdlTargetSets = uiState.settings.rdlTargetSets,
-            rdlReps = uiState.settings.rdlRepsPerSet,
-            onDeadliftOneRmChange = onDeadliftOneRmChange,
-            onRdlOneRmChange = onRdlOneRmChange,
-            onIntensityChange = onIntensityChange,
-            onDeadliftTargetSetsChange = onDeadliftTargetSetsChange,
-            onDeadliftRepsChange = onDeadliftRepsChange,
-            onRdlTargetSetsChange = onRdlTargetSetsChange,
-            onRdlRepsChange = onRdlRepsChange
+        TodayExerciseCard(
+            title = "Deadlift",
+            plan = deadliftPlan,
+            completed = uiState.deadliftSetsToday,
+            actualTonnageKg = uiState.deadliftTonnageToday,
+            selectedWeightKg = deadliftWeight,
+            onWeightSelected = { deadliftWeight = it },
+            onLog = { onQuickLog(Exercise.DEADLIFT, deadliftWeight) }
         )
 
-        TargetCard(
-            title = "Deadlift target",
-            target = uiState.deadliftTarget
+        TodayExerciseCard(
+            title = "Romanian Deadlift",
+            plan = rdlPlan,
+            completed = uiState.rdlSetsToday,
+            actualTonnageKg = uiState.rdlTonnageToday,
+            selectedWeightKg = rdlWeight,
+            onWeightSelected = { rdlWeight = it },
+            onLog = { onQuickLog(Exercise.RDL, rdlWeight) }
         )
 
-        TargetCard(
-            title = "Romanian Deadlift target",
-            target = uiState.rdlTarget
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer
-            )
-        ) {
+        Card(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text(
-                    text = "Combined daily target",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                Text("Today's volume", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                VolumeRow(
+                    "Deadlift",
+                    uiState.deadliftTonnageToday,
+                    deadliftPlan.sets * deadliftPlan.reps * deadliftWeight
                 )
-                Text("${uiState.combinedDailyReps} total reps")
-                Text("${formatKg(uiState.combinedDailyTonnageKg)} kg total tonnage")
+                VolumeRow(
+                    "RDL",
+                    uiState.rdlTonnageToday,
+                    rdlPlan.sets * rdlPlan.reps * rdlWeight
+                )
+                VolumeRow(
+                    "Total",
+                    uiState.deadliftTonnageToday + uiState.rdlTonnageToday,
+                    deadliftPlan.sets * deadliftPlan.reps * deadliftWeight +
+                        rdlPlan.sets * rdlPlan.reps * rdlWeight
+                )
             }
         }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer
-            )
-        ) {
-            Text(
-                text = "GTG rule: every rep should stay crisp. Stop the set if bar speed or technique noticeably deteriorates; this plan is not meant to be taken to fatigue.",
-                modifier = Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-
-        Spacer(Modifier.height(8.dp))
     }
 }
 
 @Composable
-private fun QuickLogSection(
-    uiState: GtgUiState,
-    onQuickLog: (Exercise) -> Unit
+private fun TodayExerciseCard(
+    title: String,
+    plan: PlannedExercise,
+    completed: Int,
+    actualTonnageKg: Double,
+    selectedWeightKg: Double,
+    onWeightSelected: (Double) -> Unit,
+    onLog: () -> Unit
 ) {
-    Text(
-        text = "Quick log",
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold
-    )
+    val progress = (completed.toFloat() / plan.sets.coerceAtLeast(1)).coerceIn(0f, 1f)
+    val complete = completed >= plan.sets
 
-    Button(
-        onClick = { onQuickLog(Exercise.DEADLIFT) },
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(
-            "+1 Deadlift set  •  ${uiState.deadliftTarget.repsPerSet} reps @ " +
-                "${formatKg(uiState.deadliftTarget.workingWeightKg)} kg"
-        )
-    }
-
-    Button(
-        onClick = { onQuickLog(Exercise.RDL) },
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(
-            "+1 RDL set  •  ${uiState.rdlTarget.repsPerSet} reps @ " +
-                "${formatKg(uiState.rdlTarget.workingWeightKg)} kg"
-        )
-    }
-
-    Text(
-        text = "Today: ${uiState.deadliftSetsToday}/${uiState.settings.deadliftTargetSets} Deadlift sets • " +
-            "${uiState.rdlSetsToday}/${uiState.settings.rdlTargetSets} RDL sets",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-}
-
-@Composable
-private fun SettingsCard(
-    deadliftOneRm: Float,
-    rdlOneRm: Float,
-    intensity: Float,
-    deadliftTargetSets: Int,
-    deadliftReps: Int,
-    rdlTargetSets: Int,
-    rdlReps: Int,
-    onDeadliftOneRmChange: (Float) -> Unit,
-    onRdlOneRmChange: (Float) -> Unit,
-    onIntensityChange: (Float) -> Unit,
-    onDeadliftTargetSetsChange: (Int) -> Unit,
-    onDeadliftRepsChange: (Int) -> Unit,
-    onRdlTargetSetsChange: (Int) -> Unit,
-    onRdlRepsChange: (Int) -> Unit
-) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = "Training calculator",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-
-            OneRmField(
-                label = "Deadlift 1RM",
-                value = deadliftOneRm,
-                onValueChange = onDeadliftOneRmChange
-            )
-
-            OneRmField(
-                label = "RDL 1RM",
-                value = rdlOneRm,
-                onValueChange = onRdlOneRmChange
-            )
-
-            Text(
-                text = "Intensity: ${intensity.roundToInt()}% of 1RM",
-                style = MaterialTheme.typography.titleSmall
-            )
-            Slider(
-                value = intensity,
-                onValueChange = { onIntensityChange(it.roundToInt().toFloat()) },
-                valueRange = 50f..70f,
-                steps = 19
-            )
-            Text(
-                text = "Recommended GTG range: 50–70%. Default is 60%.",
-                style = MaterialTheme.typography.bodySmall
-            )
-
-            ExerciseVolumeControls(
-                title = "Deadlift",
-                targetSets = deadliftTargetSets,
-                reps = deadliftReps,
-                onTargetSetsChange = onDeadliftTargetSetsChange,
-                onRepsChange = onDeadliftRepsChange
-            )
-
-            ExerciseVolumeControls(
-                title = "Romanian Deadlift",
-                targetSets = rdlTargetSets,
-                reps = rdlReps,
-                onTargetSetsChange = onRdlTargetSetsChange,
-                onRepsChange = onRdlRepsChange
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExerciseVolumeControls(
-    title: String,
-    targetSets: Int,
-    reps: Int,
-    onTargetSetsChange: (Int) -> Unit,
-    onRepsChange: (Int) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Text(
-            text = "Target sets: $targetSets / day",
-            style = MaterialTheme.typography.titleSmall
-        )
-        Slider(
-            value = targetSets.toFloat(),
-            onValueChange = { onTargetSetsChange(it.roundToInt()) },
-            valueRange = 1f..10f,
-            steps = 8
-        )
-
-        Text(
-            text = "Reps per set",
-            style = MaterialTheme.typography.titleSmall
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            (3..5).forEach { repOption ->
-                FilterChip(
-                    selected = reps == repOption,
-                    onClick = { onRepsChange(repOption) },
-                    label = { Text("$repOption reps") }
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("$completed / ${plan.sets} sets")
             }
-        }
-    }
-}
+            Text(
+                "${plan.sets} × ${plan.reps} @ ${formatPlanWeight(plan)} kg",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
 
-@Composable
-private fun OneRmField(
-    label: String,
-    value: Float,
-    onValueChange: (Float) -> Unit
-) {
-    var text by rememberSaveable { mutableStateOf(formatInput(value)) }
-
-    LaunchedEffect(value) {
-        val parsed = text.replace(',', '.').toFloatOrNull()
-        if (parsed == null || kotlin.math.abs(parsed - value) > 0.001f) {
-            text = formatInput(value)
-        }
-    }
-
-    OutlinedTextField(
-        value = text,
-        onValueChange = { newText ->
-            if (newText.length <= 7) {
-                text = newText
-                newText.replace(',', '.').toFloatOrNull()?.let { parsed ->
-                    if (parsed in 0f..1000f) onValueChange(parsed)
+            if (plan.isRange) {
+                Text("Choose today's working weight", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    weightChoices(plan).forEach { weight ->
+                        FilterChip(
+                            selected = kotlin.math.abs(selectedWeightKg - weight) < 0.01,
+                            onClick = { onWeightSelected(weight) },
+                            label = { Text("${formatKg(weight)} kg") }
+                        )
+                    }
                 }
             }
-        },
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(label) },
-        suffix = { Text("kg") },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-    )
-}
 
-@Composable
-private fun TargetCard(
-    title: String,
-    target: ExerciseTarget
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            SpecRow("Working weight", "${formatKg(target.workingWeightKg)} kg")
-            SpecRow("Reps / set", target.repsPerSet.toString())
-            SpecRow("Sets / day", target.targetSets.toString())
-            SpecRow("Daily rep target", target.totalReps.toString())
-            SpecRow("Daily tonnage", "${formatKg(target.totalTonnageKg)} kg")
-            Text(
-                text = "${formatKg(target.workingWeightKg)} kg × ${target.repsPerSet} reps × ${target.targetSets} sets",
+                "${formatKg(actualTonnageKg)} kg logged",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            Button(onClick = onLog, modifier = Modifier.fillMaxWidth()) {
+                val prefix = if (complete) "✓ Complete · + Extra set" else "+ Log set"
+                Text("$prefix · ${plan.reps} reps @ ${formatKg(selectedWeightKg)} kg")
+            }
         }
     }
 }
 
 @Composable
-private fun SpecRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
+private fun VolumeRow(label: String, actual: Double, target: Double) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, fontWeight = FontWeight.SemiBold)
+        Text("${formatKg(actual)} / ${formatKg(target)} kg", fontWeight = FontWeight.SemiBold)
     }
 }
 
-private fun formatInput(value: Float): String =
-    if (value % 1f == 0f) value.roundToInt().toString()
-    else String.format(Locale.getDefault(), "%.1f", value)
+internal fun formatPlanWeight(plan: PlannedExercise): String =
+    if (plan.isRange) "${formatKg(plan.minWeightKg)}–${formatKg(plan.maxWeightKg)}"
+    else formatKg(plan.minWeightKg)
+
+private fun weightChoices(plan: PlannedExercise): List<Double> {
+    if (!plan.isRange) return listOf(plan.minWeightKg)
+    val values = mutableListOf<Double>()
+    var value = plan.minWeightKg
+    while (value <= plan.maxWeightKg + 0.01) {
+        values += value
+        value += 2.5
+    }
+    if (kotlin.math.abs(values.last() - plan.maxWeightKg) > 0.01) values += plan.maxWeightKg
+    return values.distinct()
+}
 
 internal fun formatKg(value: Double): String =
-    String.format(Locale.getDefault(), "%.1f", value)
+    if (kotlin.math.abs(value - value.roundToInt()) < 0.001) value.roundToInt().toString()
+    else String.format(Locale.getDefault(), "%.1f", value)
