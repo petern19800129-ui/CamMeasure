@@ -1,6 +1,7 @@
 package com.petern.gtgstrength.data
 
 import java.time.DayOfWeek
+import kotlin.math.round
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -32,6 +33,16 @@ data class PlannedExercise(
             minWeightKg = low,
             maxWeightKg = high
         )
+    }
+
+    fun increasedByPercent(percent: Double): PlannedExercise {
+        if (isRest) return this
+        val factor = 1.0 + percent.coerceIn(0.0, 100.0) / 100.0
+        fun scaled(value: Double): Double = round(value * factor * 100.0) / 100.0
+        return copy(
+            minWeightKg = scaled(minWeightKg),
+            maxWeightKg = scaled(maxWeightKg)
+        ).normalized()
     }
 }
 
@@ -66,6 +77,20 @@ data class WeeklyProgram(val days: List<DayPlan>) {
                 )
                 else -> forDay(day)
             }
+        }
+    )
+
+    fun increaseDeadliftByPercent(percent: Double): WeeklyProgram = WeeklyProgram(
+        WEEK_ORDER.map { day ->
+            if (day == DayOfWeek.SATURDAY) restDay()
+            else forDay(day).let { it.copy(deadlift = it.deadlift.increasedByPercent(percent)) }
+        }
+    )
+
+    fun increaseRdlByPercent(percent: Double): WeeklyProgram = WeeklyProgram(
+        WEEK_ORDER.map { day ->
+            if (day == DayOfWeek.SATURDAY) restDay()
+            else forDay(day).let { it.copy(rdl = it.rdl.increasedByPercent(percent)) }
         }
     )
 
