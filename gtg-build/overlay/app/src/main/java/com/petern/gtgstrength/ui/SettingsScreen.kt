@@ -34,6 +34,7 @@ import com.petern.gtgstrength.data.BarbellEquipment
 import com.petern.gtgstrength.data.DayPlan
 import com.petern.gtgstrength.data.PlannedExercise
 import com.petern.gtgstrength.data.PlateStock
+import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -56,7 +57,13 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("Weekly program", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        uiState.settings.weeklyProgram.days.forEach { dayPlan ->
+        Text(
+            "Training week: Sunday–Saturday · Saturday is always a rest day.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        uiState.settings.weeklyProgram.orderedDays.forEach { dayPlan ->
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -65,10 +72,21 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
-                        OutlinedButton(onClick = { editingDay = dayPlan }) { Text("Edit") }
+                        if (dayPlan.dayOfWeek != DayOfWeek.SATURDAY) {
+                            OutlinedButton(onClick = { editingDay = dayPlan }) { Text("Edit") }
+                        }
                     }
-                    Text("Deadlift  ${dayPlan.deadlift.sets} × ${dayPlan.deadlift.reps} @ ${formatPlanWeight(dayPlan.deadlift)} kg")
-                    Text("RDL       ${dayPlan.rdl.sets} × ${dayPlan.rdl.reps} @ ${formatPlanWeight(dayPlan.rdl)} kg")
+                    if (dayPlan.isRestDay) {
+                        Text("Rest day", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "No Deadlift or RDL scheduled.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text("Deadlift  ${dayPlan.deadlift.sets} × ${dayPlan.deadlift.reps} @ ${formatPlanWeight(dayPlan.deadlift)} kg")
+                        Text("RDL       ${dayPlan.rdl.sets} × ${dayPlan.rdl.reps} @ ${formatPlanWeight(dayPlan.rdl)} kg")
+                    }
                 }
             }
         }
