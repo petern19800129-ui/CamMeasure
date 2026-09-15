@@ -26,7 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -43,6 +44,7 @@ fun BackupScreen(
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>(null) }
     var pendingRestoreJson by remember { mutableStateOf<String?>(null) }
+    val backupNameFormatter = remember { DateTimeFormatter.ofPattern("'gtg-Backup-'yyMMdd-HHmm'.json'") }
 
     val createBackupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -100,12 +102,12 @@ fun BackupScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Backup includes your 1RM/settings and all ${uiState.logs.size} logged sets. The file is normal JSON and can be kept in Drive, local storage, or another backup location.",
+                    text = "Backup includes your training settings, weekly program, bar & plate stock, and all ${uiState.logs.size} logged sets. The file is normal JSON and can be kept in Drive, local storage, or another backup location.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Button(
                     onClick = {
-                        createBackupLauncher.launch("GTGStrength-backup-${LocalDate.now()}.json")
+                        createBackupLauncher.launch(LocalDateTime.now().format(backupNameFormatter))
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -163,7 +165,7 @@ fun BackupScreen(
             onDismissRequest = { pendingRestoreJson = null },
             title = { Text("Restore this backup?") },
             text = {
-                Text("Your current settings and training history will be replaced. Create a backup first if you want to keep the current data.")
+                Text("Your current settings, bar & plate stock, and training history will be replaced. Create a backup first if you want to keep the current data.")
             },
             confirmButton = {
                 TextButton(
