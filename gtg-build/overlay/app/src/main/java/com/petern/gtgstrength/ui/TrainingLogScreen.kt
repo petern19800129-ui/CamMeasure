@@ -58,20 +58,32 @@ fun TrainingLogScreen(
             ) {
                 Text("Today's progress", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
-                ProgressCard(
-                    exerciseName = "Deadlift",
-                    completed = uiState.deadliftSetsToday,
-                    plan = uiState.todayPlan.deadlift,
-                    repsLogged = uiState.deadliftRepsToday,
-                    tonnageKg = uiState.deadliftTonnageToday
-                )
-                ProgressCard(
-                    exerciseName = "Romanian Deadlift",
-                    completed = uiState.rdlSetsToday,
-                    plan = uiState.todayPlan.rdl,
-                    repsLogged = uiState.rdlRepsToday,
-                    tonnageKg = uiState.rdlTonnageToday
-                )
+                if (uiState.todayPlan.isRestDay) {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text("Rest day", fontWeight = FontWeight.Bold)
+                            Text("Saturday is your planned day off. No Deadlift or RDL target today.")
+                        }
+                    }
+                } else {
+                    ProgressCard(
+                        exerciseName = "Deadlift",
+                        completed = uiState.deadliftSetsToday,
+                        plan = uiState.todayPlan.deadlift,
+                        repsLogged = uiState.deadliftRepsToday,
+                        tonnageKg = uiState.deadliftTonnageToday
+                    )
+                    ProgressCard(
+                        exerciseName = "Romanian Deadlift",
+                        completed = uiState.rdlSetsToday,
+                        plan = uiState.todayPlan.rdl,
+                        repsLogged = uiState.rdlRepsToday,
+                        tonnageKg = uiState.rdlTonnageToday
+                    )
+                }
 
                 WeeklyProgressSection(uiState)
 
@@ -146,6 +158,11 @@ private fun ProgressCard(
 @Composable
 private fun WeeklyProgressSection(uiState: GtgUiState) {
     Text("Weekly progress", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    Text(
+        "Week: Sunday–Saturday · Saturday rest day",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
     WeekProgressCard(
         "This week",
         uiState.thisWeek,
