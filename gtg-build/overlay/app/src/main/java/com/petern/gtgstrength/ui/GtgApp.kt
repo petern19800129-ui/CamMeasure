@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Icon
@@ -32,7 +33,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private enum class AppScreen(val label: String) {
     DASHBOARD("Dashboard"),
-    LOG("Training Log"),
+    LOG("Log"),
+    SETTINGS("Settings"),
     DATA("Backup")
 }
 
@@ -81,6 +83,7 @@ fun GtgApp(viewModel: GtgViewModel) {
                         when (screen) {
                             AppScreen.DASHBOARD -> "GTG Strength"
                             AppScreen.LOG -> "Training Log"
+                            AppScreen.SETTINGS -> "Training Settings"
                             AppScreen.DATA -> "Backup & Data"
                         }
                     )
@@ -102,9 +105,15 @@ fun GtgApp(viewModel: GtgViewModel) {
                     label = { Text(AppScreen.LOG.label) }
                 )
                 NavigationBarItem(
+                    selected = screen == AppScreen.SETTINGS,
+                    onClick = { screen = AppScreen.SETTINGS },
+                    icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
+                    label = { Text(AppScreen.SETTINGS.label) }
+                )
+                NavigationBarItem(
                     selected = screen == AppScreen.DATA,
                     onClick = { screen = AppScreen.DATA },
-                    icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
+                    icon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
                     label = { Text(AppScreen.DATA.label) }
                 )
             }
@@ -131,6 +140,18 @@ fun GtgApp(viewModel: GtgViewModel) {
                 modifier = Modifier.padding(innerPadding),
                 onUpdateLog = viewModel::updateLog,
                 onDeleteLog = viewModel::deleteLog
+            )
+
+            AppScreen.SETTINGS -> SettingsScreen(
+                uiState = uiState,
+                modifier = Modifier.padding(innerPadding),
+                onDeadliftOneRmChange = viewModel::setDeadliftOneRm,
+                onRdlOneRmChange = viewModel::setRdlOneRm,
+                onIntensityChange = viewModel::setIntensity,
+                onDeadliftTargetSetsChange = viewModel::setDeadliftTargetSets,
+                onDeadliftRepsChange = viewModel::setDeadliftRepsPerSet,
+                onRdlTargetSetsChange = viewModel::setRdlTargetSets,
+                onRdlRepsChange = viewModel::setRdlRepsPerSet
             )
 
             AppScreen.DATA -> BackupScreen(
