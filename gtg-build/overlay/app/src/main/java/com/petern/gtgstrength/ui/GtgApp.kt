@@ -143,7 +143,8 @@ fun GtgApp(viewModel: GtgViewModel) {
                 onDeadliftOneRmChange = viewModel::setDeadliftOneRm,
                 onRdlOneRmChange = viewModel::setRdlOneRm,
                 onIntensityChange = viewModel::setIntensity,
-                onDayPlanChange = viewModel::updateDayPlan
+                onDayPlanChange = viewModel::updateDayPlan,
+                onEquipmentChange = viewModel::setBarbellEquipment
             )
 
             AppScreen.DATA -> BackupScreen(
