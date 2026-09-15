@@ -84,6 +84,8 @@ object PlateCalculator {
             )
         }
 
+        // normalized() sorts from heaviest to lightest. That ordering is used
+        // as the final tie-breaker after minimizing the total number of plates.
         val usable = setup.plates
             .filter { it.weightKg > 0.0 && it.count >= 2 }
             .map { stock -> stock to (stock.count / 2) }
@@ -116,9 +118,15 @@ object PlateCalculator {
                 for (quantity in 1..maxPairs) {
                     val newSum = baseSum + plateUnits * quantity
                     if (newSum > cap) break
-                    if (newSum !in combinations) {
-                        val newCounts = baseCounts.copyOf()
-                        newCounts[index] += quantity
+
+                    val newCounts = baseCounts.copyOf()
+                    newCounts[index] += quantity
+                    val existing = combinations[newSum]
+
+                    // Multiple plate combinations can produce the same weight.
+                    // Keep the one with fewer plates; if tied, prefer the one
+                    // that uses more of the heavier plates first.
+                    if (existing == null || preferredCombination(newCounts, existing)) {
                         combinations[newSum] = newCounts
                     }
                 }
@@ -137,7 +145,9 @@ object PlateCalculator {
             val plateCount = counts.sum()
             val better = difference < bestDifference ||
                 (difference == bestDifference && overPenalty < bestOverPenalty) ||
-                (difference == bestDifference && overPenalty == bestOverPenalty && plateCount < bestPlateCount)
+                (difference == bestDifference && overPenalty == bestOverPenalty && plateCount < bestPlateCount) ||
+                (difference == bestDifference && overPenalty == bestOverPenalty && plateCount == bestPlateCount &&
+                    preferredCombination(counts, bestCounts))
 
             if (better) {
                 bestSum = sum
@@ -168,6 +178,21 @@ object PlateCalculator {
             exact = bestSum == targetPerSideUnits,
             configured = true
         )
+    }
+
+    private fun preferredCombination(candidate: IntArray, current: IntArray): Boolean {
+        val candidateCount = candidate.sum()
+        val currentCount = current.sum()
+        if (candidateCount != currentCount) return candidateCount < currentCount
+
+        // Plate indices are heaviest -> lightest. For the same number of
+        // plates, prefer the combination containing more heavier plates.
+        for (index in candidate.indices) {
+            if (candidate[index] != current[index]) {
+                return candidate[index] > current[index]
+            }
+        }
+        return false
     }
 }
 
