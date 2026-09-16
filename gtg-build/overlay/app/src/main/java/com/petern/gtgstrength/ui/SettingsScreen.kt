@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,7 +56,8 @@ fun SettingsScreen(
     onDayPlanChange: (DayPlan) -> Unit,
     onDeadliftIncreaseFive: () -> Unit,
     onRdlIncreaseFive: () -> Unit,
-    onEquipmentChange: (BarbellEquipment) -> Unit
+    onEquipmentChange: (BarbellEquipment) -> Unit,
+    onKeepScreenOnChange: (Boolean) -> Unit
 ) {
     var editingDay by remember { mutableStateOf<DayPlan?>(null) }
     var editingEquipment by remember { mutableStateOf(false) }
@@ -65,6 +67,29 @@ fun SettingsScreen(
         modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f).padding(end = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("Keep screen on", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Prevent the display from sleeping while GTG Strength is open. Normal screen timeout resumes when you leave the app.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = uiState.settings.keepScreenOn,
+                    onCheckedChange = onKeepScreenOnChange
+                )
+            }
+        }
+
         Text("Weekly program", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(
             "Training week: Sunday–Saturday · Saturday is always a rest day.",
