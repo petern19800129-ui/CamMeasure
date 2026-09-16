@@ -188,6 +188,10 @@ class GtgViewModel(
         viewModelScope.launch { settingsRepository.setBarbellEquipment(equipment) }
     }
 
+    fun setKeepScreenOn(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setKeepScreenOn(enabled) }
+    }
+
     fun quickLog(
         exercise: Exercise,
         weightKg: Double,
@@ -230,7 +234,7 @@ class GtgViewModel(
         val settings = state.settings
         val root = JSONObject()
             .put("app", "GTG Strength")
-            .put("version", 4)
+            .put("version", 5)
             .put("exportedAt", System.currentTimeMillis())
             .put(
                 "settings",
@@ -242,6 +246,7 @@ class GtgViewModel(
                     .put("deadliftRepsPerSet", settings.deadliftRepsPerSet)
                     .put("rdlTargetSets", settings.rdlTargetSets)
                     .put("rdlRepsPerSet", settings.rdlRepsPerSet)
+                    .put("keepScreenOn", settings.keepScreenOn)
             )
             .put("weeklyProgram", JSONArray(WeeklyProgramCodec.encode(settings.weeklyProgram)))
             .put("barbellEquipment", JSONObject(BarbellEquipmentCodec.encode(settings.barbellEquipment)))
@@ -265,7 +270,7 @@ class GtgViewModel(
             try {
                 val root = JSONObject(json)
                 val version = root.optInt("version", -1)
-                require(version in 1..4) { "Unsupported backup version" }
+                require(version in 1..5) { "Unsupported backup version" }
                 val saved = root.getJSONObject("settings")
                 val current = uiState.value.settings
 
@@ -292,7 +297,8 @@ class GtgViewModel(
                         rdlTargetSets = saved.optInt("rdlTargetSets", current.rdlTargetSets),
                         rdlRepsPerSet = saved.optInt("rdlRepsPerSet", current.rdlRepsPerSet),
                         weeklyProgram = restoredProgram,
-                        barbellEquipment = restoredEquipment
+                        barbellEquipment = restoredEquipment,
+                        keepScreenOn = saved.optBoolean("keepScreenOn", current.keepScreenOn)
                     )
                 )
 
