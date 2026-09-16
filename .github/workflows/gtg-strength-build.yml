@@ -51,16 +51,18 @@ jobs:
           sed -i 's/compileSdk = 37/compileSdk = 36/' gtg-build/project/GTGStrength/app/build.gradle.kts
           sed -i 's/compose-bom:2026.08.00/compose-bom:2026.06.00/g' gtg-build/project/GTGStrength/app/build.gradle.kts
 
-          # Overlay the latest GTG sources. v18 adds an expandable history tree:
-          # year -> month -> week -> day -> individual logged sets.
+          # Overlay the latest GTG sources. v19 keeps the expandable history tree
+          # but labels Sunday-Saturday groups by week number instead of date range.
           cp -a gtg-build/overlay/app/src/main/java/. gtg-build/project/GTGStrength/app/src/main/java/
           if [ -d gtg-build/overlay/app/src/test/java ]; then
             cp -a gtg-build/overlay/app/src/test/java/. gtg-build/project/GTGStrength/app/src/test/java/
           fi
 
           python3 - <<'PY'
+          from pathlib import Path
           import xml.etree.ElementTree as ET
 
+          # Permanently lock the app to portrait orientation.
           manifest = 'gtg-build/project/GTGStrength/app/src/main/AndroidManifest.xml'
           android_ns = 'http://schemas.android.com/apk/res/android'
           ET.register_namespace('android', android_ns)
@@ -72,6 +74,29 @@ jobs:
           for activity in activities:
               activity.set(f'{{{android_ns}}}screenOrientation', 'portrait')
           tree.write(manifest, encoding='utf-8', xml_declaration=True)
+
+          # Use a Sunday-based calendar week number in History.
+          log_screen = Path('gtg-build/project/GTGStrength/app/src/main/java/com/petern/gtgstrength/ui/TrainingLogScreen.kt')
+          text = log_screen.read_text()
+          old = '''private fun weekLabel(start: LocalDate): String {
+    val end = start.plusDays(6)
+    val locale = Locale.getDefault()
+    val dayMonth = DateTimeFormatter.ofPattern("d MMM", locale)
+    return if (start.year == end.year) {
+        "Week ${start.format(dayMonth)}–${end.format(dayMonth)}"
+    } else {
+        val full = DateTimeFormatter.ofPattern("d MMM yyyy", locale)
+        "Week ${start.format(full)}–${end.format(full)}"
+    }
+}'''
+          new = '''private fun weekLabel(start: LocalDate): String {
+    val weekFields = java.time.temporal.WeekFields.of(DayOfWeek.SUNDAY, 1)
+    val weekNumber = start.get(weekFields.weekOfYear())
+    return "Week $weekNumber"
+}'''
+          if old not in text:
+              raise RuntimeError('Expected weekLabel implementation not found')
+          log_screen.write_text(text.replace(old, new))
           PY
 
       - name: Run unit tests
@@ -85,7 +110,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GTGStrength-v18-apk
+          name: GTGStrength-v19-apk
           path: gtg-build/project/GTGStrength/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
