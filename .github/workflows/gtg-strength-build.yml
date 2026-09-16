@@ -60,6 +60,7 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
+          import re
           import xml.etree.ElementTree as ET
 
           # Permanently lock the app to portrait orientation.
@@ -78,25 +79,20 @@ jobs:
           # Use a Sunday-based calendar week number in History.
           log_screen = Path('gtg-build/project/GTGStrength/app/src/main/java/com/petern/gtgstrength/ui/TrainingLogScreen.kt')
           text = log_screen.read_text()
-          old = '''private fun weekLabel(start: LocalDate): String {
-    val end = start.plusDays(6)
-    val locale = Locale.getDefault()
-    val dayMonth = DateTimeFormatter.ofPattern("d MMM", locale)
-    return if (start.year == end.year) {
-        "Week ${start.format(dayMonth)}–${end.format(dayMonth)}"
-    } else {
-        val full = DateTimeFormatter.ofPattern("d MMM yyyy", locale)
-        "Week ${start.format(full)}–${end.format(full)}"
-    }
-}'''
-          new = '''private fun weekLabel(start: LocalDate): String {
-    val weekFields = java.time.temporal.WeekFields.of(DayOfWeek.SUNDAY, 1)
-    val weekNumber = start.get(weekFields.weekOfYear())
-    return "Week $weekNumber"
-}'''
-          if old not in text:
-              raise RuntimeError('Expected weekLabel implementation not found')
-          log_screen.write_text(text.replace(old, new))
+          pattern = r'private fun weekLabel\(start: LocalDate\): String \{.*?\n\}\n\nprivate fun dayLabel'
+          week_function = "\n".join([
+              'private fun weekLabel(start: LocalDate): String {',
+              '    val weekFields = java.time.temporal.WeekFields.of(DayOfWeek.SUNDAY, 1)',
+              '    val weekNumber = start.get(weekFields.weekOfYear())',
+              '    return "Week $weekNumber"',
+              '}',
+              '',
+              'private fun dayLabel'
+          ])
+          text, replacements = re.subn(pattern, week_function, text, flags=re.S)
+          if replacements != 1:
+              raise RuntimeError(f'Expected one weekLabel replacement, got {replacements}')
+          log_screen.write_text(text)
           PY
 
       - name: Run unit tests
