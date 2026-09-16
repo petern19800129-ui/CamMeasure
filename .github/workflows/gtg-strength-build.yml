@@ -51,8 +51,8 @@ jobs:
           sed -i 's/compileSdk = 37/compileSdk = 36/' gtg-build/project/GTGStrength/app/build.gradle.kts
           sed -i 's/compose-bom:2026.08.00/compose-bom:2026.06.00/g' gtg-build/project/GTGStrength/app/build.gradle.kts
 
-          # Overlay the latest GTG sources. v14 adds one-tap +5% weekly
-          # progression for Deadlift or RDL while keeping Saturday as rest.
+          # Overlay the latest GTG sources. v15 adds a persistent Settings toggle
+          # that keeps the display awake only while GTG Strength is open.
           cp -a gtg-build/overlay/app/src/main/java/. gtg-build/project/GTGStrength/app/src/main/java/
           if [ -d gtg-build/overlay/app/src/test/java ]; then
             cp -a gtg-build/overlay/app/src/test/java/. gtg-build/project/GTGStrength/app/src/test/java/
@@ -69,7 +69,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GTGStrength-v14-apk
+          name: GTGStrength-v15-apk
           path: gtg-build/project/GTGStrength/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
