@@ -2,6 +2,7 @@ package com.petern.gtgstrength.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
@@ -28,7 +29,8 @@ data class TrainingSettings(
     val rdlTargetSets: Int = 5,
     val rdlRepsPerSet: Int = 4,
     val weeklyProgram: WeeklyProgram = WeeklyProgram.default(),
-    val barbellEquipment: BarbellEquipment = BarbellEquipment.default()
+    val barbellEquipment: BarbellEquipment = BarbellEquipment.default(),
+    val keepScreenOn: Boolean = false
 )
 
 class SettingsRepository(
@@ -48,6 +50,7 @@ class SettingsRepository(
 
         val weeklyProgram = stringPreferencesKey("weekly_program_v1")
         val barbellEquipment = stringPreferencesKey("barbell_equipment_v1")
+        val keepScreenOn = booleanPreferencesKey("keep_screen_on")
     }
 
     val settings: Flow<TrainingSettings> = context.trainingSettingsDataStore.data
@@ -91,6 +94,12 @@ class SettingsRepository(
         }
     }
 
+    suspend fun setKeepScreenOn(enabled: Boolean) {
+        context.trainingSettingsDataStore.edit {
+            it[Keys.keepScreenOn] = enabled
+        }
+    }
+
     /**
      * Restore the complete settings snapshot in a single DataStore transaction.
      * This prevents one restored section (notably bar/plate stock) from being lost
@@ -108,6 +117,7 @@ class SettingsRepository(
             preferences[Keys.rdlRepsPerSet] = value.rdlRepsPerSet.coerceIn(1, 50)
             preferences[Keys.weeklyProgram] = WeeklyProgramCodec.encode(value.weeklyProgram)
             preferences[Keys.barbellEquipment] = BarbellEquipmentCodec.encode(equipment)
+            preferences[Keys.keepScreenOn] = value.keepScreenOn
         }
     }
 
@@ -148,7 +158,8 @@ class SettingsRepository(
             rdlTargetSets = preferences[Keys.rdlTargetSets] ?: legacySets,
             rdlRepsPerSet = preferences[Keys.rdlRepsPerSet] ?: legacyReps,
             weeklyProgram = WeeklyProgramCodec.decode(preferences[Keys.weeklyProgram]),
-            barbellEquipment = BarbellEquipmentCodec.decode(preferences[Keys.barbellEquipment])
+            barbellEquipment = BarbellEquipmentCodec.decode(preferences[Keys.barbellEquipment]),
+            keepScreenOn = preferences[Keys.keepScreenOn] ?: false
         )
     }
 }
