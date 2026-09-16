@@ -1,5 +1,9 @@
 package com.petern.gtgstrength.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.WindowManager
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FitnessCenter
@@ -19,7 +23,6 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,8 +30,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.petern.gtgstrength.data.TrainingLogEntity
 import com.petern.gtgstrength.domain.Exercise
@@ -51,15 +54,24 @@ fun GtgApp(viewModel: GtgViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
-    val appView = LocalView.current
+    val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
     var quickLogPopupJob by remember { mutableStateOf<Job?>(null) }
 
-    SideEffect {
-        appView.keepScreenOn = uiState.settings.keepScreenOn
-    }
-    DisposableEffect(appView) {
+    // Apply KEEP_SCREEN_ON to the actual Activity window. This is more reliable
+    // than setting keepScreenOn on the ComposeView and requires no permission.
+    DisposableEffect(activity, uiState.settings.keepScreenOn) {
+        val window = activity?.window
+        if (uiState.settings.keepScreenOn) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+
         onDispose {
-            appView.keepScreenOn = false
+            if (uiState.settings.keepScreenOn) {
+                window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
         }
     }
 
@@ -170,4 +182,10 @@ fun GtgApp(viewModel: GtgViewModel) {
             )
         }
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
