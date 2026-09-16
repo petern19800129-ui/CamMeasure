@@ -18,6 +18,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.petern.gtgstrength.data.TrainingLogEntity
 import com.petern.gtgstrength.domain.Exercise
@@ -48,7 +51,17 @@ fun GtgApp(viewModel: GtgViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val appView = LocalView.current
     var quickLogPopupJob by remember { mutableStateOf<Job?>(null) }
+
+    SideEffect {
+        appView.keepScreenOn = uiState.settings.keepScreenOn
+    }
+    DisposableEffect(appView) {
+        onDispose {
+            appView.keepScreenOn = false
+        }
+    }
 
     fun showQuickLogPopup(log: TrainingLogEntity) {
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -144,7 +157,8 @@ fun GtgApp(viewModel: GtgViewModel) {
                 onDayPlanChange = viewModel::updateDayPlan,
                 onDeadliftIncreaseFive = viewModel::increaseDeadliftProgramByFivePercent,
                 onRdlIncreaseFive = viewModel::increaseRdlProgramByFivePercent,
-                onEquipmentChange = viewModel::setBarbellEquipment
+                onEquipmentChange = viewModel::setBarbellEquipment,
+                onKeepScreenOnChange = viewModel::setKeepScreenOn
             )
 
             AppScreen.DATA -> BackupScreen(
