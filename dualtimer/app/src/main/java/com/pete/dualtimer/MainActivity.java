@@ -20,6 +20,7 @@ import android.os.Vibrator;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -37,6 +38,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Keep the display awake for as long as Dual Timer is visible.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         prefs = getSharedPreferences("dual_timer_presets", MODE_PRIVATE);
         toneGenerator = new ToneGenerator(AudioManager.STREAM_ALARM, 100);
 
@@ -191,7 +196,7 @@ public class MainActivity extends Activity {
 
         TimerController(int index, Bundle state) {
             this.index = index;
-            this.statePrefix = "timer" + index + "_";
+            statePrefix = "timer" + index + "_";
 
             long[] defaults = new long[]{
                     5 * 60_000L,
@@ -199,7 +204,7 @@ public class MainActivity extends Activity {
                     15 * 60_000L,
                     30 * 60_000L
             };
-            for (int i = 0; i < presets.length; i++) {
+            for (int i = 0; i < 4; i++) {
                 presets[i] = prefs.getLong(statePrefix + "preset" + i, defaults[i]);
             }
 
@@ -207,8 +212,8 @@ public class MainActivity extends Activity {
             remainingMs = selectedMs;
 
             if (state != null) {
-                selectedPreset = state.getInt(statePrefix + "selectedPreset", 0);
-                selectedPreset = Math.max(0, Math.min(3, selectedPreset));
+                selectedPreset = Math.max(0, Math.min(3,
+                        state.getInt(statePrefix + "selectedPreset", 0)));
                 selectedMs = state.getLong(statePrefix + "selectedMs", presets[selectedPreset]);
                 remainingMs = state.getLong(statePrefix + "remainingMs", selectedMs);
                 endElapsed = state.getLong(statePrefix + "endElapsed", 0L);
