@@ -57,7 +57,9 @@ fun SettingsScreen(
     onDeadliftIncreaseFive: () -> Unit,
     onRdlIncreaseFive: () -> Unit,
     onEquipmentChange: (BarbellEquipment) -> Unit,
-    onKeepScreenOnChange: (Boolean) -> Unit
+    onKeepScreenOnChange: (Boolean) -> Unit,
+    onDeadliftCooldownMinutesChange: (Int) -> Unit,
+    onRdlCooldownMinutesChange: (Int) -> Unit
 ) {
     var editingDay by remember { mutableStateOf<DayPlan?>(null) }
     var editingEquipment by remember { mutableStateOf(false) }
@@ -86,6 +88,50 @@ fun SettingsScreen(
                 Switch(
                     checked = uiState.settings.keepScreenOn,
                     onCheckedChange = onKeepScreenOnChange
+                )
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Log timers", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "Each exercise has its own lockout timer after a successful log. Set a timer to 0 minutes to disable its lockout.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text(
+                    if (uiState.settings.deadliftCooldownMinutes == 0) "Deadlift: Off"
+                    else "Deadlift: ${uiState.settings.deadliftCooldownMinutes} min",
+                    fontWeight = FontWeight.SemiBold
+                )
+                Slider(
+                    value = uiState.settings.deadliftCooldownMinutes.toFloat(),
+                    onValueChange = { raw ->
+                        val rounded = ((raw / 5f).roundToInt() * 5).coerceIn(0, 240)
+                        onDeadliftCooldownMinutesChange(rounded)
+                    },
+                    valueRange = 0f..240f,
+                    steps = 47
+                )
+
+                Text(
+                    if (uiState.settings.rdlCooldownMinutes == 0) "RDL: Off"
+                    else "RDL: ${uiState.settings.rdlCooldownMinutes} min",
+                    fontWeight = FontWeight.SemiBold
+                )
+                Slider(
+                    value = uiState.settings.rdlCooldownMinutes.toFloat(),
+                    onValueChange = { raw ->
+                        val rounded = ((raw / 5f).roundToInt() * 5).coerceIn(0, 240)
+                        onRdlCooldownMinutesChange(rounded)
+                    },
+                    valueRange = 0f..240f,
+                    steps = 47
                 )
             }
         }
