@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FitnessCenter
@@ -34,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.petern.gtgstrength.data.TrainingLogEntity
 import com.petern.gtgstrength.domain.Exercise
 import com.petern.gtgstrength.util.performStrongLogHaptic
+import com.petern.gtgstrength.widget.requestWidgetRefresh
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -75,6 +77,7 @@ fun GtgApp(viewModel: GtgViewModel) {
 
     fun showQuickLogPopup(log: TrainingLogEntity) {
         performStrongLogHaptic(context)
+        requestWidgetRefresh(context)
 
         quickLogPopupJob?.cancel()
         snackbarHostState.currentSnackbarData?.dismiss()
@@ -89,7 +92,8 @@ fun GtgApp(viewModel: GtgViewModel) {
                 )
             }
             if (result == SnackbarResult.ActionPerformed) {
-                viewModel.deleteLog(log)
+                viewModel.undoQuickLog(log)
+                requestWidgetRefresh(context)
             } else if (result == null) {
                 snackbarHostState.currentSnackbarData?.dismiss()
             }
@@ -147,7 +151,18 @@ fun GtgApp(viewModel: GtgViewModel) {
                 uiState = uiState,
                 modifier = Modifier.padding(innerPadding),
                 onQuickLog = { exercise, weight ->
-                    viewModel.quickLog(exercise, weight, ::showQuickLogPopup)
+                    viewModel.quickLog(
+                        exercise = exercise,
+                        weightKg = weight,
+                        onLogged = ::showQuickLogPopup,
+                        onBlocked = { remainingMillis ->
+                            Toast.makeText(
+                                context,
+                                "Next set in ${formatCooldown(remainingMillis)}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    )
                 }
             )
 
