@@ -29,12 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.petern.gtgstrength.data.TrainingLogEntity
 import com.petern.gtgstrength.domain.Exercise
+import com.petern.gtgstrength.util.performStrongLogHaptic
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -53,7 +52,6 @@ fun GtgApp(viewModel: GtgViewModel) {
     var screen by remember { mutableStateOf(AppScreen.DASHBOARD) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
     var quickLogPopupJob by remember { mutableStateOf<Job?>(null) }
@@ -76,7 +74,7 @@ fun GtgApp(viewModel: GtgViewModel) {
     }
 
     fun showQuickLogPopup(log: TrainingLogEntity) {
-        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        performStrongLogHaptic(context)
 
         quickLogPopupJob?.cancel()
         snackbarHostState.currentSnackbarData?.dismiss()
