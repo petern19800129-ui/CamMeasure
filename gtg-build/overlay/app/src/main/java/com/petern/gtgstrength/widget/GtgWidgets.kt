@@ -1,11 +1,13 @@
 package com.petern.gtgstrength.widget
 
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
 import com.petern.gtgstrength.GtgApplication
@@ -30,6 +32,13 @@ import kotlin.math.round
 private const val ACTION_QUICK_DL = "com.petern.gtgstrength.widget.QUICK_DL"
 private const val ACTION_QUICK_RDL = "com.petern.gtgstrength.widget.QUICK_RDL"
 private const val ACTION_REFRESH = "com.petern.gtgstrength.widget.REFRESH"
+private const val COOLDOWN_REFRESH_REQUEST = 90_001
+
+fun requestWidgetRefresh(context: Context) {
+    context.sendBroadcast(
+        Intent(context, TodayWidgetProvider::class.java).setAction(ACTION_REFRESH)
+    )
+}
 
 class TodayWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -93,6 +102,8 @@ private data class WidgetSnapshot(
     val plan get() = settings.weeklyProgram.forDay(today.dayOfWeek)
     val deadliftSets: Int get() = logsToday.count { it.exercise == Exercise.DEADLIFT.storedName }
     val rdlSets: Int get() = logsToday.count { it.exercise == Exercise.RDL.storedName }
+    val cooldownRemainingMillis: Long
+        get() = (settings.nextLogAllowedAtMillis - System.currentTimeMillis()).coerceAtLeast(0L)
 }
 
 private object GtgWidgetController {
@@ -107,23 +118,41 @@ private object GtgWidgetController {
         }
         if (planned.sets <= 0 || planned.reps <= 0) return
 
+        val sourceTimestamp = System.currentTimeMillis()
+        val acquired = app.settingsRepository.tryStartLogCooldown(
+            sourceLogTimestamp = sourceTimestamp,
+            nowMillis = sourceTimestamp
+        )
+        if (!acquired) return
+
         val targetWeight = planned.minWeightKg
         val loading = PlateCalculator.calculate(targetWeight, snapshot.settings.barbellEquipment)
         val logWeight = if (loading.configured) loading.actualWeightKg else targetWeight
 
-        app.trainingRepository.logSet(
-            exercise = exercise,
-            reps = planned.reps,
-            weightKg = logWeight.coerceIn(0.0, 2000.0)
-        )
+        try {
+            app.trainingRepository.logSet(
+                exercise = exercise,
+                reps = planned.reps,
+                weightKg = logWeight.coerceIn(0.0, 2000.0),
+                timestamp = sourceTimestamp
+            )
+        } catch (error: Exception) {
+            app.settingsRepository.clearLogCooldownIfSource(sourceTimestamp)
+            throw error
+        }
 
-        // A short tactile confirmation means the set was successfully saved.
+        // Tactile confirmation only after the set and cooldown are saved.
         performStrongLogHaptic(context, background = true)
+        scheduleCooldownRefresh(context, snapshot.settings.nextLogAllowedAtMillis.takeIf { it > sourceTimestamp }
+            ?: sourceTimestamp + 60L * 60L * 1000L)
     }
 
     suspend fun refreshAll(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
         val snapshot = load(context)
+        if (snapshot.cooldownRemainingMillis > 0L) {
+            scheduleCooldownRefresh(context, snapshot.settings.nextLogAllowedAtMillis)
+        }
 
         manager.getAppWidgetIds(ComponentName(context, TodayWidgetProvider::class.java))
             .forEach { renderToday(context, manager, it, snapshot) }
@@ -158,6 +187,11 @@ private object GtgWidgetController {
         views.setTextViewText(R.id.widget_title, "GTG Strength · $dayName")
         views.setOnClickPendingIntent(R.id.widget_root, openAppPendingIntent(context))
         views.setOnClickPendingIntent(R.id.widget_refresh, refreshPendingIntent(context, 10_000 + widgetId))
+        bindCooldownChronometer(
+            views = views,
+            chronometerId = R.id.widget_cooldown,
+            remainingMillis = snapshot.cooldownRemainingMillis
+        )
 
         if (snapshot.plan.isRestDay) {
             views.setViewVisibility(R.id.widget_training_content, View.GONE)
@@ -211,6 +245,11 @@ private object GtgWidgetController {
 
         views.setOnClickPendingIntent(R.id.widget_progress_root, openAppPendingIntent(context))
         views.setOnClickPendingIntent(R.id.widget_progress_refresh, refreshPendingIntent(context, 40_000 + widgetId))
+        bindCooldownChronometer(
+            views = views,
+            chronometerId = R.id.widget_progress_cooldown,
+            remainingMillis = snapshot.cooldownRemainingMillis
+        )
 
         if (snapshot.plan.isRestDay) {
             views.setTextViewText(R.id.widget_progress_title, "GTG · $day · Rest day")
@@ -279,3 +318,39 @@ private fun formatKg(value: Double): String {
     }
 }
 
+
+
+private fun bindCooldownChronometer(
+    views: RemoteViews,
+    chronometerId: Int,
+    remainingMillis: Long
+) {
+    if (remainingMillis <= 0L) {
+        views.setViewVisibility(chronometerId, View.GONE)
+        return
+    }
+
+    views.setViewVisibility(chronometerId, View.VISIBLE)
+    val base = SystemClock.elapsedRealtime() + remainingMillis
+    views.setChronometer(chronometerId, base, "Next set · %s", true)
+    views.setChronometerCountDown(chronometerId, true)
+}
+
+private fun scheduleCooldownRefresh(context: Context, nextAllowedAtMillis: Long) {
+    val remaining = (nextAllowedAtMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+    if (remaining <= 0L) return
+
+    val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+    val intent = Intent(context, TodayWidgetProvider::class.java).setAction(ACTION_REFRESH)
+    val pendingIntent = PendingIntent.getBroadcast(
+        context,
+        COOLDOWN_REFRESH_REQUEST,
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+    alarmManager.setAndAllowWhileIdle(
+        AlarmManager.ELAPSED_REALTIME,
+        SystemClock.elapsedRealtime() + remaining + 1_000L,
+        pendingIntent
+    )
+}
