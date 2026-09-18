@@ -183,7 +183,17 @@ fun GtgApp(viewModel: GtgViewModel) {
                 onDeadliftIncreaseFive = viewModel::increaseDeadliftProgramByFivePercent,
                 onRdlIncreaseFive = viewModel::increaseRdlProgramByFivePercent,
                 onEquipmentChange = viewModel::setBarbellEquipment,
-                onKeepScreenOnChange = viewModel::setKeepScreenOn
+                onKeepScreenOnChange = viewModel::setKeepScreenOn,
+                onDeadliftCooldownMinutesChange = { minutes ->
+                    viewModel.setDeadliftCooldownMinutes(minutes) {
+                        requestWidgetRefresh(context)
+                    }
+                },
+                onRdlCooldownMinutesChange = { minutes ->
+                    viewModel.setRdlCooldownMinutes(minutes) {
+                        requestWidgetRefresh(context)
+                    }
+                }
             )
 
             AppScreen.DATA -> BackupScreen(
