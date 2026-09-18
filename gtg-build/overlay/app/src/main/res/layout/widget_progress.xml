@@ -30,10 +30,20 @@
             android:textSize="14sp" />
 
         <Chronometer
-            android:id="@+id/widget_progress_cooldown"
+            android:id="@+id/widget_progress_deadlift_cooldown"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
+            android:textColor="#FFFFD166"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <Chronometer
+            android:id="@+id/widget_progress_rdl_cooldown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
             android:textColor="#FFFFD166"
             android:textSize="12sp"
             android:textStyle="bold"
