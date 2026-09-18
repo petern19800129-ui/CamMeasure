@@ -69,7 +69,8 @@ data class GtgUiState(
     val lastWeek: WeekStats = WeekStats(),
     val weekDays: List<WeekDayProgress> = emptyList(),
     val logs: List<TrainingLogEntity> = emptyList(),
-    val cooldownRemainingMillis: Long = 0L
+    val deadliftCooldownRemainingMillis: Long = 0L,
+    val rdlCooldownRemainingMillis: Long = 0L
 ) {
     val plannedWeeklyDeadliftSets: Int get() = settings.weeklyProgram.deadliftWeeklySets
     val plannedWeeklyRdlSets: Int get() = settings.weeklyProgram.rdlWeeklySets
@@ -152,7 +153,10 @@ class GtgViewModel(
             lastWeek = calculateWeekStats(logs, startOfLastWeek, startOfThisWeek),
             weekDays = weekDays,
             logs = logs,
-            cooldownRemainingMillis = (settings.nextLogAllowedAtMillis - nowMillis).coerceAtLeast(0L)
+            deadliftCooldownRemainingMillis =
+                (settings.deadliftNextLogAllowedAtMillis - nowMillis).coerceAtLeast(0L),
+            rdlCooldownRemainingMillis =
+                (settings.rdlNextLogAllowedAtMillis - nowMillis).coerceAtLeast(0L)
         )
     }.stateIn(
         scope = viewModelScope,
@@ -210,12 +214,13 @@ class GtgViewModel(
         viewModelScope.launch {
             val sourceTimestamp = System.currentTimeMillis()
             val acquired = settingsRepository.tryStartLogCooldown(
+                exercise = exercise,
                 sourceLogTimestamp = sourceTimestamp,
                 nowMillis = sourceTimestamp
             )
 
             if (!acquired) {
-                onBlocked(settingsRepository.cooldownRemainingMillis())
+                onBlocked(settingsRepository.cooldownRemainingMillis(exercise))
                 return@launch
             }
 
@@ -228,7 +233,7 @@ class GtgViewModel(
                 )
                 onLogged(logged)
             } catch (error: Exception) {
-                settingsRepository.clearLogCooldownIfSource(sourceTimestamp)
+                settingsRepository.clearLogCooldownIfSource(exercise, sourceTimestamp)
                 throw error
             }
         }
@@ -240,7 +245,8 @@ class GtgViewModel(
     ) {
         viewModelScope.launch {
             trainingRepository.delete(log)
-            settingsRepository.clearLogCooldownIfSource(log.timestamp)
+            val exercise = Exercise.fromStoredName(log.exercise)
+            settingsRepository.clearLogCooldownIfSource(exercise, log.timestamp)
             onUndone()
         }
     }
