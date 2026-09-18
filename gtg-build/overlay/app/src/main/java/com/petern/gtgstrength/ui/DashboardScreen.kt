@@ -103,25 +103,24 @@ fun DashboardScreen(
             color = MaterialTheme.colorScheme.primary
         )
 
-        if (uiState.cooldownRemainingMillis > 0L) {
+        if (
+            uiState.deadliftCooldownRemainingMillis > 0L ||
+            uiState.rdlCooldownRemainingMillis > 0L
+        ) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        "Recovery timer",
+                        "1-hour timers",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
+                    CooldownStatusRow("Deadlift", uiState.deadliftCooldownRemainingMillis)
+                    CooldownStatusRow("RDL", uiState.rdlCooldownRemainingMillis)
                     Text(
-                        "Next set in ${formatCooldown(uiState.cooldownRemainingMillis)}",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Quick Log is locked until the 1-hour timer finishes.",
+                        "Each exercise has its own timer, so one Deadlift and one RDL set can be logged in the same hour.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -136,8 +135,8 @@ fun DashboardScreen(
             actualTonnageKg = uiState.deadliftTonnageToday,
             selectedWeightKg = deadliftWeight,
             loading = deadliftLoading,
-            canLog = uiState.cooldownRemainingMillis <= 0L,
-            cooldownRemainingMillis = uiState.cooldownRemainingMillis,
+            canLog = uiState.deadliftCooldownRemainingMillis <= 0L,
+            cooldownRemainingMillis = uiState.deadliftCooldownRemainingMillis,
             onWeightSelected = { deadliftWeight = it },
             onLog = { onQuickLog(Exercise.DEADLIFT, deadliftLogWeight) }
         )
@@ -149,8 +148,8 @@ fun DashboardScreen(
             actualTonnageKg = uiState.rdlTonnageToday,
             selectedWeightKg = rdlWeight,
             loading = rdlLoading,
-            canLog = uiState.cooldownRemainingMillis <= 0L,
-            cooldownRemainingMillis = uiState.cooldownRemainingMillis,
+            canLog = uiState.rdlCooldownRemainingMillis <= 0L,
+            cooldownRemainingMillis = uiState.rdlCooldownRemainingMillis,
             onWeightSelected = { rdlWeight = it },
             onLog = { onQuickLog(Exercise.RDL, rdlLogWeight) }
         )
@@ -179,6 +178,22 @@ fun DashboardScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun CooldownStatusRow(label: String, remainingMillis: Long) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            if (remainingMillis > 0L) formatCooldown(remainingMillis) else "Ready",
+            color = if (remainingMillis > 0L) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
