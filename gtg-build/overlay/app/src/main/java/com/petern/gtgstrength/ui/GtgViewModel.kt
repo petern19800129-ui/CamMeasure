@@ -68,7 +68,8 @@ data class GtgUiState(
     val thisWeek: WeekStats = WeekStats(),
     val lastWeek: WeekStats = WeekStats(),
     val weekDays: List<WeekDayProgress> = emptyList(),
-    val logs: List<TrainingLogEntity> = emptyList()
+    val logs: List<TrainingLogEntity> = emptyList(),
+    val cooldownRemainingMillis: Long = 0L
 ) {
     val plannedWeeklyDeadliftSets: Int get() = settings.weeklyProgram.deadliftWeeklySets
     val plannedWeeklyRdlSets: Int get() = settings.weeklyProgram.rdlWeeklySets
@@ -79,10 +80,10 @@ class GtgViewModel(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    private val dateRefresh = flow {
+    private val clockRefresh = flow {
         while (true) {
-            emit(Unit)
-            delay(60_000L)
+            emit(System.currentTimeMillis())
+            delay(1_000L)
         }
     }
 
@@ -91,9 +92,9 @@ class GtgViewModel(
     val uiState = combine(
         settingsRepository.settings,
         trainingRepository.logs,
-        dateRefresh,
+        clockRefresh,
         manualRefresh
-    ) { settings, logs, _, _ ->
+    ) { settings, logs, nowMillis, _ ->
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val todayPlan = settings.weeklyProgram.forDay(today.dayOfWeek)
@@ -150,7 +151,8 @@ class GtgViewModel(
             thisWeek = calculateWeekStats(logs, startOfThisWeek, startOfNextWeek),
             lastWeek = calculateWeekStats(logs, startOfLastWeek, startOfThisWeek),
             weekDays = weekDays,
-            logs = logs
+            logs = logs,
+            cooldownRemainingMillis = (settings.nextLogAllowedAtMillis - nowMillis).coerceAtLeast(0L)
         )
     }.stateIn(
         scope = viewModelScope,
@@ -195,7 +197,8 @@ class GtgViewModel(
     fun quickLog(
         exercise: Exercise,
         weightKg: Double,
-        onLogged: (TrainingLogEntity) -> Unit
+        onLogged: (TrainingLogEntity) -> Unit,
+        onBlocked: (Long) -> Unit
     ) {
         val plan = when (exercise) {
             Exercise.DEADLIFT -> uiState.value.todayPlan.deadlift
@@ -205,12 +208,38 @@ class GtgViewModel(
 
         val safeWeight = weightKg.coerceIn(0.0, 2000.0)
         viewModelScope.launch {
-            val logged = trainingRepository.logSet(
-                exercise = exercise,
-                reps = plan.reps,
-                weightKg = safeWeight
+            val sourceTimestamp = System.currentTimeMillis()
+            val acquired = settingsRepository.tryStartLogCooldown(
+                sourceLogTimestamp = sourceTimestamp,
+                nowMillis = sourceTimestamp
             )
-            onLogged(logged)
+
+            if (!acquired) {
+                val remaining = (uiState.value.settings.nextLogAllowedAtMillis - System.currentTimeMillis())
+                    .coerceAtLeast(0L)
+                onBlocked(remaining)
+                return@launch
+            }
+
+            try {
+                val logged = trainingRepository.logSet(
+                    exercise = exercise,
+                    reps = plan.reps,
+                    weightKg = safeWeight,
+                    timestamp = sourceTimestamp
+                )
+                onLogged(logged)
+            } catch (error: Exception) {
+                settingsRepository.clearLogCooldownIfSource(sourceTimestamp)
+                throw error
+            }
+        }
+    }
+
+    fun undoQuickLog(log: TrainingLogEntity) {
+        viewModelScope.launch {
+            trainingRepository.delete(log)
+            settingsRepository.clearLogCooldownIfSource(log.timestamp)
         }
     }
 
