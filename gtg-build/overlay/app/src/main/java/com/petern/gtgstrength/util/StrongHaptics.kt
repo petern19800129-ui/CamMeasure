@@ -9,7 +9,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 
 /**
- * Strong double-pulse confirmation for a successfully saved set.
+ * Strong 150 ms confirmation for a successfully saved set.
  *
  * Home-screen widget actions execute while the app is backgrounded, so they
  * need vibration attributes that Android permits for background vibration.
@@ -24,11 +24,10 @@ fun performStrongLogHaptic(context: Context, background: Boolean = false) {
 
     if (!vibrator.hasVibrator()) return
 
-    // Two unmistakable pulses at full amplitude.
-    val effect = VibrationEffect.createWaveform(
-        longArrayOf(0L, 80L, 45L, 120L),
-        intArrayOf(0, 255, 0, 255),
-        -1
+    // One continuous 150 ms pulse at full amplitude.
+    val effect = VibrationEffect.createOneShot(
+        150L,
+        255
     )
 
     if (background) {
