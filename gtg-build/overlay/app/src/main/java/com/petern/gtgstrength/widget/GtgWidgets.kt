@@ -12,6 +12,7 @@ import android.view.View
 import android.widget.RemoteViews
 import com.petern.gtgstrength.GtgApplication
 import com.petern.gtgstrength.R
+import com.petern.gtgstrength.data.LOG_COOLDOWN_MILLIS
 import com.petern.gtgstrength.data.PlateCalculator
 import com.petern.gtgstrength.data.TrainingLogEntity
 import com.petern.gtgstrength.data.TrainingSettings
@@ -32,7 +33,8 @@ import kotlin.math.round
 private const val ACTION_QUICK_DL = "com.petern.gtgstrength.widget.QUICK_DL"
 private const val ACTION_QUICK_RDL = "com.petern.gtgstrength.widget.QUICK_RDL"
 private const val ACTION_REFRESH = "com.petern.gtgstrength.widget.REFRESH"
-private const val COOLDOWN_REFRESH_REQUEST = 90_001
+private const val COOLDOWN_REFRESH_DL_REQUEST = 90_001
+private const val COOLDOWN_REFRESH_RDL_REQUEST = 90_002
 
 fun requestWidgetRefresh(context: Context) {
     context.sendBroadcast(
@@ -102,8 +104,10 @@ private data class WidgetSnapshot(
     val plan get() = settings.weeklyProgram.forDay(today.dayOfWeek)
     val deadliftSets: Int get() = logsToday.count { it.exercise == Exercise.DEADLIFT.storedName }
     val rdlSets: Int get() = logsToday.count { it.exercise == Exercise.RDL.storedName }
-    val cooldownRemainingMillis: Long
-        get() = (settings.nextLogAllowedAtMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+    val deadliftCooldownRemainingMillis: Long
+        get() = (settings.deadliftNextLogAllowedAtMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+    val rdlCooldownRemainingMillis: Long
+        get() = (settings.rdlNextLogAllowedAtMillis - System.currentTimeMillis()).coerceAtLeast(0L)
 }
 
 private object GtgWidgetController {
@@ -120,6 +124,7 @@ private object GtgWidgetController {
 
         val sourceTimestamp = System.currentTimeMillis()
         val acquired = app.settingsRepository.tryStartLogCooldown(
+            exercise = exercise,
             sourceLogTimestamp = sourceTimestamp,
             nowMillis = sourceTimestamp
         )
@@ -137,21 +142,35 @@ private object GtgWidgetController {
                 timestamp = sourceTimestamp
             )
         } catch (error: Exception) {
-            app.settingsRepository.clearLogCooldownIfSource(sourceTimestamp)
+            app.settingsRepository.clearLogCooldownIfSource(exercise, sourceTimestamp)
             throw error
         }
 
         // Tactile confirmation only after the set and cooldown are saved.
         performStrongLogHaptic(context, background = true)
-        scheduleCooldownRefresh(context, snapshot.settings.nextLogAllowedAtMillis.takeIf { it > sourceTimestamp }
-            ?: sourceTimestamp + 60L * 60L * 1000L)
+        scheduleCooldownRefresh(
+            context = context,
+            nextAllowedAtMillis = sourceTimestamp + LOG_COOLDOWN_MILLIS,
+            exercise = exercise
+        )
     }
 
     suspend fun refreshAll(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
         val snapshot = load(context)
-        if (snapshot.cooldownRemainingMillis > 0L) {
-            scheduleCooldownRefresh(context, snapshot.settings.nextLogAllowedAtMillis)
+        if (snapshot.deadliftCooldownRemainingMillis > 0L) {
+            scheduleCooldownRefresh(
+                context,
+                snapshot.settings.deadliftNextLogAllowedAtMillis,
+                Exercise.DEADLIFT
+            )
+        }
+        if (snapshot.rdlCooldownRemainingMillis > 0L) {
+            scheduleCooldownRefresh(
+                context,
+                snapshot.settings.rdlNextLogAllowedAtMillis,
+                Exercise.RDL
+            )
         }
 
         manager.getAppWidgetIds(ComponentName(context, TodayWidgetProvider::class.java))
@@ -187,11 +206,6 @@ private object GtgWidgetController {
         views.setTextViewText(R.id.widget_title, "GTG Strength · $dayName")
         views.setOnClickPendingIntent(R.id.widget_root, openAppPendingIntent(context))
         views.setOnClickPendingIntent(R.id.widget_refresh, refreshPendingIntent(context, 10_000 + widgetId))
-        bindCooldownChronometer(
-            views = views,
-            chronometerId = R.id.widget_cooldown,
-            remainingMillis = snapshot.cooldownRemainingMillis
-        )
 
         if (snapshot.plan.isRestDay) {
             views.setViewVisibility(R.id.widget_training_content, View.GONE)
@@ -221,6 +235,38 @@ private object GtgWidgetController {
                 "${snapshot.plan.rdl.reps} reps @ ${formatKg(rdlWeight)} kg"
             )
 
+            bindCooldownChronometer(
+                views = views,
+                chronometerId = R.id.widget_deadlift_cooldown,
+                remainingMillis = snapshot.deadliftCooldownRemainingMillis,
+                label = "Next DL"
+            )
+            bindCooldownChronometer(
+                views = views,
+                chronometerId = R.id.widget_rdl_cooldown,
+                remainingMillis = snapshot.rdlCooldownRemainingMillis,
+                label = "Next RDL"
+            )
+
+            views.setBoolean(
+                R.id.widget_log_deadlift,
+                "setEnabled",
+                snapshot.deadliftCooldownRemainingMillis <= 0L
+            )
+            views.setTextViewText(
+                R.id.widget_log_deadlift,
+                if (snapshot.deadliftCooldownRemainingMillis > 0L) "DL locked" else "+1 DL"
+            )
+            views.setBoolean(
+                R.id.widget_log_rdl,
+                "setEnabled",
+                snapshot.rdlCooldownRemainingMillis <= 0L
+            )
+            views.setTextViewText(
+                R.id.widget_log_rdl,
+                if (snapshot.rdlCooldownRemainingMillis > 0L) "RDL locked" else "+1 RDL"
+            )
+
             views.setOnClickPendingIntent(
                 R.id.widget_log_deadlift,
                 quickLogPendingIntent(context, Exercise.DEADLIFT, 20_000 + widgetId)
@@ -247,8 +293,15 @@ private object GtgWidgetController {
         views.setOnClickPendingIntent(R.id.widget_progress_refresh, refreshPendingIntent(context, 40_000 + widgetId))
         bindCooldownChronometer(
             views = views,
-            chronometerId = R.id.widget_progress_cooldown,
-            remainingMillis = snapshot.cooldownRemainingMillis
+            chronometerId = R.id.widget_progress_deadlift_cooldown,
+            remainingMillis = snapshot.deadliftCooldownRemainingMillis,
+            label = "DL"
+        )
+        bindCooldownChronometer(
+            views = views,
+            chronometerId = R.id.widget_progress_rdl_cooldown,
+            remainingMillis = snapshot.rdlCooldownRemainingMillis,
+            label = "RDL"
         )
 
         if (snapshot.plan.isRestDay) {
@@ -323,7 +376,8 @@ private fun formatKg(value: Double): String {
 private fun bindCooldownChronometer(
     views: RemoteViews,
     chronometerId: Int,
-    remainingMillis: Long
+    remainingMillis: Long,
+    label: String
 ) {
     if (remainingMillis <= 0L) {
         views.setViewVisibility(chronometerId, View.GONE)
@@ -332,11 +386,15 @@ private fun bindCooldownChronometer(
 
     views.setViewVisibility(chronometerId, View.VISIBLE)
     val base = SystemClock.elapsedRealtime() + remainingMillis
-    views.setChronometer(chronometerId, base, "Next set · %s", true)
+    views.setChronometer(chronometerId, base, "$label · %s", true)
     views.setChronometerCountDown(chronometerId, true)
 }
 
-private fun scheduleCooldownRefresh(context: Context, nextAllowedAtMillis: Long) {
+private fun scheduleCooldownRefresh(
+    context: Context,
+    nextAllowedAtMillis: Long,
+    exercise: Exercise
+) {
     val remaining = (nextAllowedAtMillis - System.currentTimeMillis()).coerceAtLeast(0L)
     if (remaining <= 0L) return
 
@@ -344,7 +402,8 @@ private fun scheduleCooldownRefresh(context: Context, nextAllowedAtMillis: Long)
     val intent = Intent(context, TodayWidgetProvider::class.java).setAction(ACTION_REFRESH)
     val pendingIntent = PendingIntent.getBroadcast(
         context,
-        COOLDOWN_REFRESH_REQUEST,
+        if (exercise == Exercise.DEADLIFT) COOLDOWN_REFRESH_DL_REQUEST
+        else COOLDOWN_REFRESH_RDL_REQUEST,
         intent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
