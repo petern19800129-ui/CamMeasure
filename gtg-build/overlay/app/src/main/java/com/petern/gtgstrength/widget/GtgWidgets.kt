@@ -12,7 +12,6 @@ import android.view.View
 import android.widget.RemoteViews
 import com.petern.gtgstrength.GtgApplication
 import com.petern.gtgstrength.R
-import com.petern.gtgstrength.data.LOG_COOLDOWN_MILLIS
 import com.petern.gtgstrength.data.PlateCalculator
 import com.petern.gtgstrength.data.TrainingLogEntity
 import com.petern.gtgstrength.data.TrainingSettings
@@ -148,9 +147,13 @@ private object GtgWidgetController {
 
         // Tactile confirmation only after the set and cooldown are saved.
         performStrongLogHaptic(context, background = true)
+        val cooldownMinutes = when (exercise) {
+            Exercise.DEADLIFT -> snapshot.settings.deadliftCooldownMinutes
+            Exercise.RDL -> snapshot.settings.rdlCooldownMinutes
+        }
         scheduleCooldownRefresh(
             context = context,
-            nextAllowedAtMillis = sourceTimestamp + LOG_COOLDOWN_MILLIS,
+            nextAllowedAtMillis = sourceTimestamp + cooldownMinutes * 60_000L,
             exercise = exercise
         )
     }
