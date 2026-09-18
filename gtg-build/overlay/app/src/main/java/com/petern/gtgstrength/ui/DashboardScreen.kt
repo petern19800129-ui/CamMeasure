@@ -103,6 +103,32 @@ fun DashboardScreen(
             color = MaterialTheme.colorScheme.primary
         )
 
+        if (uiState.cooldownRemainingMillis > 0L) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "Recovery timer",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Next set in ${formatCooldown(uiState.cooldownRemainingMillis)}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Quick Log is locked until the 1-hour timer finishes.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
         TodayExerciseCard(
             title = "Deadlift",
             plan = deadliftPlan,
@@ -110,6 +136,8 @@ fun DashboardScreen(
             actualTonnageKg = uiState.deadliftTonnageToday,
             selectedWeightKg = deadliftWeight,
             loading = deadliftLoading,
+            canLog = uiState.cooldownRemainingMillis <= 0L,
+            cooldownRemainingMillis = uiState.cooldownRemainingMillis,
             onWeightSelected = { deadliftWeight = it },
             onLog = { onQuickLog(Exercise.DEADLIFT, deadliftLogWeight) }
         )
@@ -121,6 +149,8 @@ fun DashboardScreen(
             actualTonnageKg = uiState.rdlTonnageToday,
             selectedWeightKg = rdlWeight,
             loading = rdlLoading,
+            canLog = uiState.cooldownRemainingMillis <= 0L,
+            cooldownRemainingMillis = uiState.cooldownRemainingMillis,
             onWeightSelected = { rdlWeight = it },
             onLog = { onQuickLog(Exercise.RDL, rdlLogWeight) }
         )
@@ -160,6 +190,8 @@ private fun TodayExerciseCard(
     actualTonnageKg: Double,
     selectedWeightKg: Double,
     loading: PlateLoading,
+    canLog: Boolean,
+    cooldownRemainingMillis: Long,
     onWeightSelected: (Double) -> Unit,
     onLog: () -> Unit
 ) {
@@ -206,9 +238,17 @@ private fun TodayExerciseCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Button(onClick = onLog, modifier = Modifier.fillMaxWidth()) {
-                val prefix = if (complete) "✓ Complete · + Extra set" else "+ Log set"
-                Text("$prefix · ${plan.reps} reps @ ${formatKg(logWeight)} kg")
+            Button(
+                onClick = onLog,
+                enabled = canLog,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (!canLog) {
+                    Text("Locked · ${formatCooldown(cooldownRemainingMillis)}")
+                } else {
+                    val prefix = if (complete) "✓ Complete · + Extra set" else "+ Log set"
+                    Text("$prefix · ${plan.reps} reps @ ${formatKg(logWeight)} kg")
+                }
             }
         }
     }
@@ -286,3 +326,11 @@ private fun weightChoices(plan: PlannedExercise): List<Double> {
 internal fun formatKg(value: Double): String =
     if (abs(value - value.roundToInt()) < 0.001) value.roundToInt().toString()
     else String.format(Locale.getDefault(), "%.2f", value).trimEnd('0').trimEnd(',').trimEnd('.')
+
+
+internal fun formatCooldown(milliseconds: Long): String {
+    val totalSeconds = ((milliseconds.coerceAtLeast(0L) + 999L) / 1000L)
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+}
