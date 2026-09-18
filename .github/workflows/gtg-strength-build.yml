@@ -51,9 +51,12 @@ jobs:
           sed -i 's/compileSdk = 37/compileSdk = 36/' gtg-build/project/GTGStrength/app/build.gradle.kts
           sed -i 's/compose-bom:2026.08.00/compose-bom:2026.06.00/g' gtg-build/project/GTGStrength/app/build.gradle.kts
 
-          # Overlay the latest GTG sources. v19 keeps the expandable history tree
-          # but labels Sunday-Saturday groups by week number instead of date range.
+          # Overlay the latest GTG sources. v20 adds two Android home-screen widgets:
+          # a Today/Quick Log widget and a compact Today Progress widget.
           cp -a gtg-build/overlay/app/src/main/java/. gtg-build/project/GTGStrength/app/src/main/java/
+          if [ -d gtg-build/overlay/app/src/main/res ]; then
+            cp -a gtg-build/overlay/app/src/main/res/. gtg-build/project/GTGStrength/app/src/main/res/
+          fi
           if [ -d gtg-build/overlay/app/src/test/java ]; then
             cp -a gtg-build/overlay/app/src/test/java/. gtg-build/project/GTGStrength/app/src/test/java/
           fi
@@ -74,6 +77,30 @@ jobs:
               raise RuntimeError('No Android activities found in manifest')
           for activity in activities:
               activity.set(f'{{{android_ns}}}screenOrientation', 'portrait')
+
+          # Register the two home-screen widget providers.
+          application = root.find('application')
+          if application is None:
+              raise RuntimeError('No Android application element found in manifest')
+
+          widget_receivers = [
+              ('.widget.TodayWidgetProvider', '@xml/widget_today_info'),
+              ('.widget.ProgressWidgetProvider', '@xml/widget_progress_info'),
+          ]
+          for class_name, info_resource in widget_receivers:
+              existing = application.find(f"receiver[@{{{android_ns}}}name='{class_name}']")
+              receiver = existing if existing is not None else ET.SubElement(application, 'receiver')
+              receiver.set(f'{{{android_ns}}}name', class_name)
+              receiver.set(f'{{{android_ns}}}exported', 'false')
+
+              if existing is None:
+                  intent_filter = ET.SubElement(receiver, 'intent-filter')
+                  action = ET.SubElement(intent_filter, 'action')
+                  action.set(f'{{{android_ns}}}name', 'android.appwidget.action.APPWIDGET_UPDATE')
+                  meta = ET.SubElement(receiver, 'meta-data')
+                  meta.set(f'{{{android_ns}}}name', 'android.appwidget.provider')
+                  meta.set(f'{{{android_ns}}}resource', info_resource)
+
           tree.write(manifest, encoding='utf-8', xml_declaration=True)
 
           # Use a Sunday-based calendar week number in History.
@@ -106,7 +133,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GTGStrength-v19-apk
+          name: GTGStrength-v20-apk
           path: gtg-build/project/GTGStrength/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
