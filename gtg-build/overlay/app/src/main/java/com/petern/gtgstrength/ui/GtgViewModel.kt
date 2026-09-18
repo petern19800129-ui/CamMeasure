@@ -234,10 +234,14 @@ class GtgViewModel(
         }
     }
 
-    fun undoQuickLog(log: TrainingLogEntity) {
+    fun undoQuickLog(
+        log: TrainingLogEntity,
+        onUndone: () -> Unit = {}
+    ) {
         viewModelScope.launch {
             trainingRepository.delete(log)
             settingsRepository.clearLogCooldownIfSource(log.timestamp)
+            onUndone()
         }
     }
 
