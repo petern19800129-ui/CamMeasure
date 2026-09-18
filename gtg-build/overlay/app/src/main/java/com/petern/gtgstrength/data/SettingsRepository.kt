@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.petern.gtgstrength.domain.Exercise
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -35,8 +36,10 @@ data class TrainingSettings(
     val barbellEquipment: BarbellEquipment = BarbellEquipment.default(),
     val keepScreenOn: Boolean = false,
     // Transient training state. Intentionally not included in backup export.
-    val nextLogAllowedAtMillis: Long = 0L,
-    val cooldownSourceLogTimestamp: Long = 0L
+    val deadliftNextLogAllowedAtMillis: Long = 0L,
+    val rdlNextLogAllowedAtMillis: Long = 0L,
+    val deadliftCooldownSourceLogTimestamp: Long = 0L,
+    val rdlCooldownSourceLogTimestamp: Long = 0L
 )
 
 class SettingsRepository(
@@ -57,8 +60,11 @@ class SettingsRepository(
         val weeklyProgram = stringPreferencesKey("weekly_program_v1")
         val barbellEquipment = stringPreferencesKey("barbell_equipment_v1")
         val keepScreenOn = booleanPreferencesKey("keep_screen_on")
-        val nextLogAllowedAtMillis = longPreferencesKey("next_log_allowed_at_millis")
-        val cooldownSourceLogTimestamp = longPreferencesKey("cooldown_source_log_timestamp")
+
+        val deadliftNextLogAllowedAtMillis = longPreferencesKey("deadlift_next_log_allowed_at_millis")
+        val rdlNextLogAllowedAtMillis = longPreferencesKey("rdl_next_log_allowed_at_millis")
+        val deadliftCooldownSourceLogTimestamp = longPreferencesKey("deadlift_cooldown_source_log_timestamp")
+        val rdlCooldownSourceLogTimestamp = longPreferencesKey("rdl_cooldown_source_log_timestamp")
     }
 
     val settings: Flow<TrainingSettings> = context.trainingSettingsDataStore.data
@@ -109,19 +115,23 @@ class SettingsRepository(
     }
 
     /**
-     * Atomically reserves the one-hour logging window.
-     * Returns false when another app/widget log is still inside the cooldown.
+     * Atomically reserves the one-hour logging window for one exercise.
+     * Deadlift and RDL have independent cooldowns, so one of each may be logged
+     * during the same hour.
      */
     suspend fun tryStartLogCooldown(
+        exercise: Exercise,
         sourceLogTimestamp: Long,
         nowMillis: Long = System.currentTimeMillis()
     ): Boolean {
         var acquired = false
         context.trainingSettingsDataStore.edit { preferences ->
-            val currentUntil = preferences[Keys.nextLogAllowedAtMillis] ?: 0L
+            val nextKey = nextAllowedKey(exercise)
+            val sourceKey = sourceTimestampKey(exercise)
+            val currentUntil = preferences[nextKey] ?: 0L
             if (currentUntil <= nowMillis) {
-                preferences[Keys.nextLogAllowedAtMillis] = nowMillis + LOG_COOLDOWN_MILLIS
-                preferences[Keys.cooldownSourceLogTimestamp] = sourceLogTimestamp
+                preferences[nextKey] = nowMillis + LOG_COOLDOWN_MILLIS
+                preferences[sourceKey] = sourceLogTimestamp
                 acquired = true
             }
         }
@@ -129,26 +139,39 @@ class SettingsRepository(
     }
 
     /**
-     * Clears the cooldown only when it belongs to the supplied just-created log.
-     * This makes the 3-second Cancel action safe without affecting later logs.
+     * Clears only the matching exercise cooldown and only when it belongs to the
+     * supplied just-created log. This keeps the 3-second Cancel action precise.
      */
-    suspend fun clearLogCooldownIfSource(sourceLogTimestamp: Long) {
+    suspend fun clearLogCooldownIfSource(
+        exercise: Exercise,
+        sourceLogTimestamp: Long
+    ) {
         context.trainingSettingsDataStore.edit { preferences ->
-            val source = preferences[Keys.cooldownSourceLogTimestamp] ?: 0L
+            val nextKey = nextAllowedKey(exercise)
+            val sourceKey = sourceTimestampKey(exercise)
+            val source = preferences[sourceKey] ?: 0L
             if (source == sourceLogTimestamp) {
-                preferences[Keys.nextLogAllowedAtMillis] = 0L
-                preferences[Keys.cooldownSourceLogTimestamp] = 0L
+                preferences[nextKey] = 0L
+                preferences[sourceKey] = 0L
             }
         }
     }
 
-    suspend fun cooldownRemainingMillis(nowMillis: Long = System.currentTimeMillis()): Long =
-        (settings.first().nextLogAllowedAtMillis - nowMillis).coerceAtLeast(0L)
+    suspend fun cooldownRemainingMillis(
+        exercise: Exercise,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Long {
+        val current = settings.first()
+        val nextAllowed = when (exercise) {
+            Exercise.DEADLIFT -> current.deadliftNextLogAllowedAtMillis
+            Exercise.RDL -> current.rdlNextLogAllowedAtMillis
+        }
+        return (nextAllowed - nowMillis).coerceAtLeast(0L)
+    }
 
     /**
      * Restore the complete settings snapshot in a single DataStore transaction.
-     * This prevents one restored section (notably bar/plate stock) from being lost
-     * between several independent preference edits.
+     * Cooldown state is intentionally left alone because it is transient.
      */
     suspend fun replaceSettings(value: TrainingSettings) {
         val equipment = value.barbellEquipment.normalized()
@@ -191,6 +214,16 @@ class SettingsRepository(
         }
     }
 
+    private fun nextAllowedKey(exercise: Exercise) = when (exercise) {
+        Exercise.DEADLIFT -> Keys.deadliftNextLogAllowedAtMillis
+        Exercise.RDL -> Keys.rdlNextLogAllowedAtMillis
+    }
+
+    private fun sourceTimestampKey(exercise: Exercise) = when (exercise) {
+        Exercise.DEADLIFT -> Keys.deadliftCooldownSourceLogTimestamp
+        Exercise.RDL -> Keys.rdlCooldownSourceLogTimestamp
+    }
+
     private fun preferencesToSettings(preferences: Preferences): TrainingSettings {
         val legacySets = preferences[Keys.legacyTargetSets] ?: 5
         val legacyReps = preferences[Keys.legacyRepsPerSet] ?: 4
@@ -205,8 +238,10 @@ class SettingsRepository(
             weeklyProgram = WeeklyProgramCodec.decode(preferences[Keys.weeklyProgram]),
             barbellEquipment = BarbellEquipmentCodec.decode(preferences[Keys.barbellEquipment]),
             keepScreenOn = preferences[Keys.keepScreenOn] ?: false,
-            nextLogAllowedAtMillis = preferences[Keys.nextLogAllowedAtMillis] ?: 0L,
-            cooldownSourceLogTimestamp = preferences[Keys.cooldownSourceLogTimestamp] ?: 0L
+            deadliftNextLogAllowedAtMillis = preferences[Keys.deadliftNextLogAllowedAtMillis] ?: 0L,
+            rdlNextLogAllowedAtMillis = preferences[Keys.rdlNextLogAllowedAtMillis] ?: 0L,
+            deadliftCooldownSourceLogTimestamp = preferences[Keys.deadliftCooldownSourceLogTimestamp] ?: 0L,
+            rdlCooldownSourceLogTimestamp = preferences[Keys.rdlCooldownSourceLogTimestamp] ?: 0L
         )
     }
 }
