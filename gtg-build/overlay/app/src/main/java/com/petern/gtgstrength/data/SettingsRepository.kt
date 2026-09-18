@@ -21,8 +21,6 @@ private val Context.trainingSettingsDataStore by preferencesDataStore(
     name = "training_settings"
 )
 
-const val LOG_COOLDOWN_MILLIS: Long = 60L * 60L * 1000L
-
 data class TrainingSettings(
     val deadliftOneRmKg: Float = 70f,
     val rdlOneRmKg: Float = 50f,
@@ -35,6 +33,8 @@ data class TrainingSettings(
     val weeklyProgram: WeeklyProgram = WeeklyProgram.default(),
     val barbellEquipment: BarbellEquipment = BarbellEquipment.default(),
     val keepScreenOn: Boolean = false,
+    val deadliftCooldownMinutes: Int = 60,
+    val rdlCooldownMinutes: Int = 60,
     // Transient training state. Intentionally not included in backup export.
     val deadliftNextLogAllowedAtMillis: Long = 0L,
     val rdlNextLogAllowedAtMillis: Long = 0L,
@@ -60,6 +60,8 @@ class SettingsRepository(
         val weeklyProgram = stringPreferencesKey("weekly_program_v1")
         val barbellEquipment = stringPreferencesKey("barbell_equipment_v1")
         val keepScreenOn = booleanPreferencesKey("keep_screen_on")
+        val deadliftCooldownMinutes = intPreferencesKey("deadlift_cooldown_minutes")
+        val rdlCooldownMinutes = intPreferencesKey("rdl_cooldown_minutes")
 
         val deadliftNextLogAllowedAtMillis = longPreferencesKey("deadlift_next_log_allowed_at_millis")
         val rdlNextLogAllowedAtMillis = longPreferencesKey("rdl_next_log_allowed_at_millis")
@@ -114,6 +116,21 @@ class SettingsRepository(
         }
     }
 
+    suspend fun setCooldownMinutes(exercise: Exercise, minutes: Int) {
+        val safeMinutes = minutes.coerceIn(0, 720)
+        context.trainingSettingsDataStore.edit { preferences ->
+            val durationKey = cooldownMinutesKey(exercise)
+            val nextKey = nextAllowedKey(exercise)
+            val sourceKey = sourceTimestampKey(exercise)
+            preferences[durationKey] = safeMinutes
+
+            val sourceTimestamp = preferences[sourceKey] ?: 0L
+            if (sourceTimestamp > 0L) {
+                preferences[nextKey] = sourceTimestamp + safeMinutes * 60_000L
+            }
+        }
+    }
+
     /**
      * Atomically reserves the one-hour logging window for one exercise.
      * Deadlift and RDL have independent cooldowns, so one of each may be logged
@@ -130,7 +147,8 @@ class SettingsRepository(
             val sourceKey = sourceTimestampKey(exercise)
             val currentUntil = preferences[nextKey] ?: 0L
             if (currentUntil <= nowMillis) {
-                preferences[nextKey] = nowMillis + LOG_COOLDOWN_MILLIS
+                val durationMinutes = preferences[cooldownMinutesKey(exercise)] ?: 60
+                preferences[nextKey] = nowMillis + durationMinutes.coerceIn(0, 720) * 60_000L
                 preferences[sourceKey] = sourceLogTimestamp
                 acquired = true
             }
@@ -186,6 +204,8 @@ class SettingsRepository(
             preferences[Keys.weeklyProgram] = WeeklyProgramCodec.encode(value.weeklyProgram)
             preferences[Keys.barbellEquipment] = BarbellEquipmentCodec.encode(equipment)
             preferences[Keys.keepScreenOn] = value.keepScreenOn
+            preferences[Keys.deadliftCooldownMinutes] = value.deadliftCooldownMinutes.coerceIn(0, 720)
+            preferences[Keys.rdlCooldownMinutes] = value.rdlCooldownMinutes.coerceIn(0, 720)
         }
     }
 
@@ -214,6 +234,11 @@ class SettingsRepository(
         }
     }
 
+    private fun cooldownMinutesKey(exercise: Exercise) = when (exercise) {
+        Exercise.DEADLIFT -> Keys.deadliftCooldownMinutes
+        Exercise.RDL -> Keys.rdlCooldownMinutes
+    }
+
     private fun nextAllowedKey(exercise: Exercise) = when (exercise) {
         Exercise.DEADLIFT -> Keys.deadliftNextLogAllowedAtMillis
         Exercise.RDL -> Keys.rdlNextLogAllowedAtMillis
@@ -238,6 +263,8 @@ class SettingsRepository(
             weeklyProgram = WeeklyProgramCodec.decode(preferences[Keys.weeklyProgram]),
             barbellEquipment = BarbellEquipmentCodec.decode(preferences[Keys.barbellEquipment]),
             keepScreenOn = preferences[Keys.keepScreenOn] ?: false,
+            deadliftCooldownMinutes = preferences[Keys.deadliftCooldownMinutes] ?: 60,
+            rdlCooldownMinutes = preferences[Keys.rdlCooldownMinutes] ?: 60,
             deadliftNextLogAllowedAtMillis = preferences[Keys.deadliftNextLogAllowedAtMillis] ?: 0L,
             rdlNextLogAllowedAtMillis = preferences[Keys.rdlNextLogAllowedAtMillis] ?: 0L,
             deadliftCooldownSourceLogTimestamp = preferences[Keys.deadliftCooldownSourceLogTimestamp] ?: 0L,
