@@ -215,9 +215,7 @@ class GtgViewModel(
             )
 
             if (!acquired) {
-                val remaining = (uiState.value.settings.nextLogAllowedAtMillis - System.currentTimeMillis())
-                    .coerceAtLeast(0L)
-                onBlocked(remaining)
+                onBlocked(settingsRepository.cooldownRemainingMillis())
                 return@launch
             }
 
