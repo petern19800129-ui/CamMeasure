@@ -355,11 +355,11 @@ class GtgViewModel(
                         deadliftCooldownMinutes = saved.optInt(
                             "deadliftCooldownMinutes",
                             current.deadliftCooldownMinutes
-                        ).coerceIn(0, 720),
+                        ).coerceIn(0, 240),
                         rdlCooldownMinutes = saved.optInt(
                             "rdlCooldownMinutes",
                             current.rdlCooldownMinutes
-                        ).coerceIn(0, 720)
+                        ).coerceIn(0, 240)
                     )
                 )
 
