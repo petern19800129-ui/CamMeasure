@@ -28,6 +28,16 @@
             android:text="DL 0/0 · RDL 0/0"
             android:textColor="#FFCDD2E3"
             android:textSize="14sp" />
+
+        <Chronometer
+            android:id="@+id/widget_progress_cooldown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="#FFFFD166"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
     </LinearLayout>
     <TextView
         android:id="@+id/widget_progress_refresh"
