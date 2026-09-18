@@ -158,7 +158,7 @@ fun GtgApp(viewModel: GtgViewModel) {
                         onBlocked = { remainingMillis ->
                             Toast.makeText(
                                 context,
-                                "Next set in ${formatCooldown(remainingMillis)}",
+                                "${exercise.displayName} available in ${formatCooldown(remainingMillis)}",
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
