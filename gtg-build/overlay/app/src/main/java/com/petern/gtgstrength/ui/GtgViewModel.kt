@@ -198,6 +198,20 @@ class GtgViewModel(
         viewModelScope.launch { settingsRepository.setKeepScreenOn(enabled) }
     }
 
+    fun setDeadliftCooldownMinutes(value: Int, onChanged: () -> Unit = {}) {
+        viewModelScope.launch {
+            settingsRepository.setCooldownMinutes(Exercise.DEADLIFT, value)
+            onChanged()
+        }
+    }
+
+    fun setRdlCooldownMinutes(value: Int, onChanged: () -> Unit = {}) {
+        viewModelScope.launch {
+            settingsRepository.setCooldownMinutes(Exercise.RDL, value)
+            onChanged()
+        }
+    }
+
     fun quickLog(
         exercise: Exercise,
         weightKg: Double,
@@ -271,7 +285,7 @@ class GtgViewModel(
         val settings = state.settings
         val root = JSONObject()
             .put("app", "GTG Strength")
-            .put("version", 5)
+            .put("version", 6)
             .put("exportedAt", System.currentTimeMillis())
             .put(
                 "settings",
@@ -284,6 +298,8 @@ class GtgViewModel(
                     .put("rdlTargetSets", settings.rdlTargetSets)
                     .put("rdlRepsPerSet", settings.rdlRepsPerSet)
                     .put("keepScreenOn", settings.keepScreenOn)
+                    .put("deadliftCooldownMinutes", settings.deadliftCooldownMinutes)
+                    .put("rdlCooldownMinutes", settings.rdlCooldownMinutes)
             )
             .put("weeklyProgram", JSONArray(WeeklyProgramCodec.encode(settings.weeklyProgram)))
             .put("barbellEquipment", JSONObject(BarbellEquipmentCodec.encode(settings.barbellEquipment)))
@@ -307,7 +323,7 @@ class GtgViewModel(
             try {
                 val root = JSONObject(json)
                 val version = root.optInt("version", -1)
-                require(version in 1..5) { "Unsupported backup version" }
+                require(version in 1..6) { "Unsupported backup version" }
                 val saved = root.getJSONObject("settings")
                 val current = uiState.value.settings
 
@@ -335,7 +351,15 @@ class GtgViewModel(
                         rdlRepsPerSet = saved.optInt("rdlRepsPerSet", current.rdlRepsPerSet),
                         weeklyProgram = restoredProgram,
                         barbellEquipment = restoredEquipment,
-                        keepScreenOn = saved.optBoolean("keepScreenOn", current.keepScreenOn)
+                        keepScreenOn = saved.optBoolean("keepScreenOn", current.keepScreenOn),
+                        deadliftCooldownMinutes = saved.optInt(
+                            "deadliftCooldownMinutes",
+                            current.deadliftCooldownMinutes
+                        ).coerceIn(0, 720),
+                        rdlCooldownMinutes = saved.optInt(
+                            "rdlCooldownMinutes",
+                            current.rdlCooldownMinutes
+                        ).coerceIn(0, 720)
                     )
                 )
 
