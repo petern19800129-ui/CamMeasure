@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.io.IOException
@@ -19,6 +20,8 @@ private val Context.trainingSettingsDataStore by preferencesDataStore(
     name = "training_settings"
 )
 
+const val LOG_COOLDOWN_MILLIS: Long = 60L * 60L * 1000L
+
 data class TrainingSettings(
     val deadliftOneRmKg: Float = 70f,
     val rdlOneRmKg: Float = 50f,
@@ -30,7 +33,10 @@ data class TrainingSettings(
     val rdlRepsPerSet: Int = 4,
     val weeklyProgram: WeeklyProgram = WeeklyProgram.default(),
     val barbellEquipment: BarbellEquipment = BarbellEquipment.default(),
-    val keepScreenOn: Boolean = false
+    val keepScreenOn: Boolean = false,
+    // Transient training state. Intentionally not included in backup export.
+    val nextLogAllowedAtMillis: Long = 0L,
+    val cooldownSourceLogTimestamp: Long = 0L
 )
 
 class SettingsRepository(
@@ -51,6 +57,8 @@ class SettingsRepository(
         val weeklyProgram = stringPreferencesKey("weekly_program_v1")
         val barbellEquipment = stringPreferencesKey("barbell_equipment_v1")
         val keepScreenOn = booleanPreferencesKey("keep_screen_on")
+        val nextLogAllowedAtMillis = longPreferencesKey("next_log_allowed_at_millis")
+        val cooldownSourceLogTimestamp = longPreferencesKey("cooldown_source_log_timestamp")
     }
 
     val settings: Flow<TrainingSettings> = context.trainingSettingsDataStore.data
@@ -97,6 +105,40 @@ class SettingsRepository(
     suspend fun setKeepScreenOn(enabled: Boolean) {
         context.trainingSettingsDataStore.edit {
             it[Keys.keepScreenOn] = enabled
+        }
+    }
+
+    /**
+     * Atomically reserves the one-hour logging window.
+     * Returns false when another app/widget log is still inside the cooldown.
+     */
+    suspend fun tryStartLogCooldown(
+        sourceLogTimestamp: Long,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Boolean {
+        var acquired = false
+        context.trainingSettingsDataStore.edit { preferences ->
+            val currentUntil = preferences[Keys.nextLogAllowedAtMillis] ?: 0L
+            if (currentUntil <= nowMillis) {
+                preferences[Keys.nextLogAllowedAtMillis] = nowMillis + LOG_COOLDOWN_MILLIS
+                preferences[Keys.cooldownSourceLogTimestamp] = sourceLogTimestamp
+                acquired = true
+            }
+        }
+        return acquired
+    }
+
+    /**
+     * Clears the cooldown only when it belongs to the supplied just-created log.
+     * This makes the 3-second Cancel action safe without affecting later logs.
+     */
+    suspend fun clearLogCooldownIfSource(sourceLogTimestamp: Long) {
+        context.trainingSettingsDataStore.edit { preferences ->
+            val source = preferences[Keys.cooldownSourceLogTimestamp] ?: 0L
+            if (source == sourceLogTimestamp) {
+                preferences[Keys.nextLogAllowedAtMillis] = 0L
+                preferences[Keys.cooldownSourceLogTimestamp] = 0L
+            }
         }
     }
 
@@ -159,7 +201,9 @@ class SettingsRepository(
             rdlRepsPerSet = preferences[Keys.rdlRepsPerSet] ?: legacyReps,
             weeklyProgram = WeeklyProgramCodec.decode(preferences[Keys.weeklyProgram]),
             barbellEquipment = BarbellEquipmentCodec.decode(preferences[Keys.barbellEquipment]),
-            keepScreenOn = preferences[Keys.keepScreenOn] ?: false
+            keepScreenOn = preferences[Keys.keepScreenOn] ?: false,
+            nextLogAllowedAtMillis = preferences[Keys.nextLogAllowedAtMillis] ?: 0L,
+            cooldownSourceLogTimestamp = preferences[Keys.cooldownSourceLogTimestamp] ?: 0L
         )
     }
 }
