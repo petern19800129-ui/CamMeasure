@@ -51,8 +51,8 @@ jobs:
           sed -i 's/compileSdk = 37/compileSdk = 36/' gtg-build/project/GTGStrength/app/build.gradle.kts
           sed -i 's/compose-bom:2026.08.00/compose-bom:2026.06.00/g' gtg-build/project/GTGStrength/app/build.gradle.kts
 
-          # Overlay the latest GTG sources. v20 adds two Android home-screen widgets:
-          # a Today/Quick Log widget and a compact Today Progress widget.
+          # Overlay the latest GTG sources. v21 adds tactile confirmation
+          # after a set is successfully logged from the Today widget.
           cp -a gtg-build/overlay/app/src/main/java/. gtg-build/project/GTGStrength/app/src/main/java/
           if [ -d gtg-build/overlay/app/src/main/res ]; then
             cp -a gtg-build/overlay/app/src/main/res/. gtg-build/project/GTGStrength/app/src/main/res/
@@ -82,6 +82,17 @@ jobs:
           application = root.find('application')
           if application is None:
               raise RuntimeError('No Android application element found in manifest')
+
+          # Widget haptic confirmation uses Android's normal VIBRATE permission.
+          permission_name = 'android.permission.VIBRATE'
+          has_vibrate = any(
+              item.get(f'{{{android_ns}}}name') == permission_name
+              for item in root.findall('uses-permission')
+          )
+          if not has_vibrate:
+              permission = ET.Element('uses-permission')
+              permission.set(f'{{{android_ns}}}name', permission_name)
+              root.insert(list(root).index(application), permission)
 
           widget_receivers = [
               ('.widget.TodayWidgetProvider', '@xml/widget_today_info'),
@@ -133,7 +144,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GTGStrength-v20-apk
+          name: GTGStrength-v21-apk
           path: gtg-build/project/GTGStrength/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
