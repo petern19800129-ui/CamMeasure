@@ -142,6 +142,9 @@ class SettingsRepository(
         }
     }
 
+    suspend fun cooldownRemainingMillis(nowMillis: Long = System.currentTimeMillis()): Long =
+        (settings.first().nextLogAllowedAtMillis - nowMillis).coerceAtLeast(0L)
+
     /**
      * Restore the complete settings snapshot in a single DataStore transaction.
      * This prevents one restored section (notably bar/plate stock) from being lost
