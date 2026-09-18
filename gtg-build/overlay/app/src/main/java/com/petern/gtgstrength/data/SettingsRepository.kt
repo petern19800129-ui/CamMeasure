@@ -117,7 +117,7 @@ class SettingsRepository(
     }
 
     suspend fun setCooldownMinutes(exercise: Exercise, minutes: Int) {
-        val safeMinutes = minutes.coerceIn(0, 720)
+        val safeMinutes = minutes.coerceIn(0, 240)
         context.trainingSettingsDataStore.edit { preferences ->
             val durationKey = cooldownMinutesKey(exercise)
             val nextKey = nextAllowedKey(exercise)
@@ -125,7 +125,10 @@ class SettingsRepository(
             preferences[durationKey] = safeMinutes
 
             val sourceTimestamp = preferences[sourceKey] ?: 0L
-            if (sourceTimestamp > 0L) {
+            if (safeMinutes == 0) {
+                preferences[nextKey] = 0L
+                preferences[sourceKey] = 0L
+            } else if (sourceTimestamp > 0L) {
                 preferences[nextKey] = sourceTimestamp + safeMinutes * 60_000L
             }
         }
@@ -147,9 +150,14 @@ class SettingsRepository(
             val sourceKey = sourceTimestampKey(exercise)
             val currentUntil = preferences[nextKey] ?: 0L
             if (currentUntil <= nowMillis) {
-                val durationMinutes = preferences[cooldownMinutesKey(exercise)] ?: 60
-                preferences[nextKey] = nowMillis + durationMinutes.coerceIn(0, 720) * 60_000L
-                preferences[sourceKey] = sourceLogTimestamp
+                val durationMinutes = (preferences[cooldownMinutesKey(exercise)] ?: 60).coerceIn(0, 240)
+                if (durationMinutes == 0) {
+                    preferences[nextKey] = 0L
+                    preferences[sourceKey] = 0L
+                } else {
+                    preferences[nextKey] = nowMillis + durationMinutes * 60_000L
+                    preferences[sourceKey] = sourceLogTimestamp
+                }
                 acquired = true
             }
         }
@@ -204,8 +212,8 @@ class SettingsRepository(
             preferences[Keys.weeklyProgram] = WeeklyProgramCodec.encode(value.weeklyProgram)
             preferences[Keys.barbellEquipment] = BarbellEquipmentCodec.encode(equipment)
             preferences[Keys.keepScreenOn] = value.keepScreenOn
-            preferences[Keys.deadliftCooldownMinutes] = value.deadliftCooldownMinutes.coerceIn(0, 720)
-            preferences[Keys.rdlCooldownMinutes] = value.rdlCooldownMinutes.coerceIn(0, 720)
+            preferences[Keys.deadliftCooldownMinutes] = value.deadliftCooldownMinutes.coerceIn(0, 240)
+            preferences[Keys.rdlCooldownMinutes] = value.rdlCooldownMinutes.coerceIn(0, 240)
         }
     }
 
