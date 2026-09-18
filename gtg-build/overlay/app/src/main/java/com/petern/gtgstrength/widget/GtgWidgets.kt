@@ -6,6 +6,10 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.view.View
 import android.widget.RemoteViews
 import com.petern.gtgstrength.GtgApplication
@@ -115,6 +119,9 @@ private object GtgWidgetController {
             reps = planned.reps,
             weightKg = logWeight.coerceIn(0.0, 2000.0)
         )
+
+        // A short tactile confirmation means the set was successfully saved.
+        performWidgetHaptic(context)
     }
 
     suspend fun refreshAll(context: Context) {
@@ -273,4 +280,23 @@ private fun formatKg(value: Double): String {
     } else {
         rounded.toString().trimEnd('0').trimEnd('.')
     }
+}
+
+
+private fun performWidgetHaptic(context: Context) {
+    val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+    } ?: return
+
+    if (!vibrator.hasVibrator()) return
+
+    val effect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
+    } else {
+        VibrationEffect.createOneShot(45L, VibrationEffect.DEFAULT_AMPLITUDE)
+    }
+    vibrator.vibrate(effect)
 }
