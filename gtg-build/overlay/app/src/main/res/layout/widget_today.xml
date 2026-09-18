@@ -31,16 +31,6 @@
             android:textSize="22sp" />
     </LinearLayout>
 
-    <Chronometer
-        android:id="@+id/widget_cooldown"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="4dp"
-        android:gravity="center"
-        android:textColor="#FFFFD166"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
 
     <TextView
         android:id="@+id/widget_rest_text"
@@ -85,6 +75,14 @@
                     android:text="1 rep @ 0 kg"
                     android:textColor="#FFCDD2E3"
                     android:textSize="13sp" />
+                <Chronometer
+                    android:id="@+id/widget_deadlift_cooldown"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFD166"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
             </LinearLayout>
             <Button
                 android:id="@+id/widget_log_deadlift"
@@ -120,6 +118,14 @@
                     android:text="1 rep @ 0 kg"
                     android:textColor="#FFCDD2E3"
                     android:textSize="13sp" />
+                <Chronometer
+                    android:id="@+id/widget_rdl_cooldown"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFD166"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
             </LinearLayout>
             <Button
                 android:id="@+id/widget_log_rdl"
