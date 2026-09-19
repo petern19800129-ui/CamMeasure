@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.petern.gtgstrength.data.BarbellEquipment
 import com.petern.gtgstrength.data.BarbellEquipmentCodec
 import com.petern.gtgstrength.data.DayPlan
+import com.petern.gtgstrength.data.ProgressionLog
+import com.petern.gtgstrength.data.ProgressionPolicy
+import com.petern.gtgstrength.data.ProgressionReadiness
 import com.petern.gtgstrength.data.SettingsRepository
 import com.petern.gtgstrength.data.TrainingLogEntity
 import com.petern.gtgstrength.data.TrainingRepository
@@ -70,7 +73,9 @@ data class GtgUiState(
     val weekDays: List<WeekDayProgress> = emptyList(),
     val logs: List<TrainingLogEntity> = emptyList(),
     val deadliftCooldownRemainingMillis: Long = 0L,
-    val rdlCooldownRemainingMillis: Long = 0L
+    val rdlCooldownRemainingMillis: Long = 0L,
+    val deadliftProgression: ProgressionReadiness = ProgressionReadiness(),
+    val rdlProgression: ProgressionReadiness = ProgressionReadiness()
 ) {
     val plannedWeeklyDeadliftSets: Int get() = settings.weeklyProgram.deadliftWeeklySets
     val plannedWeeklyRdlSets: Int get() = settings.weeklyProgram.rdlWeeklySets
@@ -137,6 +142,29 @@ class GtgViewModel(
             )
         }
 
+        val progressionLogs = logs.map {
+            ProgressionLog(
+                exerciseStoredName = it.exercise,
+                timestamp = it.timestamp
+            )
+        }
+        val deadliftProgression = ProgressionPolicy.evaluate(
+            program = settings.weeklyProgram,
+            logs = progressionLogs,
+            exercise = Exercise.DEADLIFT,
+            today = today,
+            zone = zone,
+            lastProgressionAtMillis = settings.deadliftLastProgressionAtMillis
+        )
+        val rdlProgression = ProgressionPolicy.evaluate(
+            program = settings.weeklyProgram,
+            logs = progressionLogs,
+            exercise = Exercise.RDL,
+            today = today,
+            zone = zone,
+            lastProgressionAtMillis = settings.rdlLastProgressionAtMillis
+        )
+
         GtgUiState(
             settings = settings,
             todayPlan = todayPlan,
@@ -156,7 +184,9 @@ class GtgViewModel(
             deadliftCooldownRemainingMillis =
                 (settings.deadliftNextLogAllowedAtMillis - nowMillis).coerceAtLeast(0L),
             rdlCooldownRemainingMillis =
-                (settings.rdlNextLogAllowedAtMillis - nowMillis).coerceAtLeast(0L)
+                (settings.rdlNextLogAllowedAtMillis - nowMillis).coerceAtLeast(0L),
+            deadliftProgression = deadliftProgression,
+            rdlProgression = rdlProgression
         )
     }.stateIn(
         scope = viewModelScope,
@@ -181,13 +211,27 @@ class GtgViewModel(
     }
 
     fun increaseDeadliftProgramByFivePercent() {
-        val updated = uiState.value.settings.weeklyProgram.increaseDeadliftByPercent(5.0)
-        viewModelScope.launch { settingsRepository.setWeeklyProgram(updated) }
+        val state = uiState.value
+        if (!state.deadliftProgression.isReady) return
+        val updated = state.settings.weeklyProgram.increaseDeadliftByPercent(5.0)
+        viewModelScope.launch {
+            settingsRepository.applyWeeklyProgression(
+                exercise = Exercise.DEADLIFT,
+                program = updated
+            )
+        }
     }
 
     fun increaseRdlProgramByFivePercent() {
-        val updated = uiState.value.settings.weeklyProgram.increaseRdlByPercent(5.0)
-        viewModelScope.launch { settingsRepository.setWeeklyProgram(updated) }
+        val state = uiState.value
+        if (!state.rdlProgression.isReady) return
+        val updated = state.settings.weeklyProgram.increaseRdlByPercent(5.0)
+        viewModelScope.launch {
+            settingsRepository.applyWeeklyProgression(
+                exercise = Exercise.RDL,
+                program = updated
+            )
+        }
     }
 
     fun setBarbellEquipment(equipment: BarbellEquipment) {
@@ -285,7 +329,7 @@ class GtgViewModel(
         val settings = state.settings
         val root = JSONObject()
             .put("app", "GTG Strength")
-            .put("version", 6)
+            .put("version", 7)
             .put("exportedAt", System.currentTimeMillis())
             .put(
                 "settings",
@@ -300,6 +344,8 @@ class GtgViewModel(
                     .put("keepScreenOn", settings.keepScreenOn)
                     .put("deadliftCooldownMinutes", settings.deadliftCooldownMinutes)
                     .put("rdlCooldownMinutes", settings.rdlCooldownMinutes)
+                    .put("deadliftLastProgressionAtMillis", settings.deadliftLastProgressionAtMillis)
+                    .put("rdlLastProgressionAtMillis", settings.rdlLastProgressionAtMillis)
             )
             .put("weeklyProgram", JSONArray(WeeklyProgramCodec.encode(settings.weeklyProgram)))
             .put("barbellEquipment", JSONObject(BarbellEquipmentCodec.encode(settings.barbellEquipment)))
@@ -323,7 +369,7 @@ class GtgViewModel(
             try {
                 val root = JSONObject(json)
                 val version = root.optInt("version", -1)
-                require(version in 1..6) { "Unsupported backup version" }
+                require(version in 1..7) { "Unsupported backup version" }
                 val saved = root.getJSONObject("settings")
                 val current = uiState.value.settings
 
@@ -359,7 +405,17 @@ class GtgViewModel(
                         rdlCooldownMinutes = saved.optInt(
                             "rdlCooldownMinutes",
                             current.rdlCooldownMinutes
-                        ).coerceIn(0, 240)
+                        ).coerceIn(0, 240),
+                        deadliftLastProgressionAtMillis = if (version >= 7) {
+                            saved.optLong("deadliftLastProgressionAtMillis", 0L).coerceAtLeast(0L)
+                        } else {
+                            0L
+                        },
+                        rdlLastProgressionAtMillis = if (version >= 7) {
+                            saved.optLong("rdlLastProgressionAtMillis", 0L).coerceAtLeast(0L)
+                        } else {
+                            0L
+                        }
                     )
                 )
 
