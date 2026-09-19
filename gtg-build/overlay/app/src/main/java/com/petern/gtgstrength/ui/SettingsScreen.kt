@@ -36,6 +36,7 @@ import com.petern.gtgstrength.data.BarbellEquipment
 import com.petern.gtgstrength.data.DayPlan
 import com.petern.gtgstrength.data.PlannedExercise
 import com.petern.gtgstrength.data.PlateStock
+import com.petern.gtgstrength.data.ProgressionReadiness
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
@@ -150,22 +151,40 @@ fun SettingsScreen(
             ) {
                 Text("Weekly progression", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Increase one exercise across every programmed workout Sunday–Friday. Sets, reps and Saturday rest stay unchanged.",
+                    "A +5% increase unlocks only after 2 consecutive 100% completed weeks for that exercise. Existing Training Log data is used. Any week below 100% resets that exercise to 0/2.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                ProgressionStatus(
+                    exerciseName = "Deadlift",
+                    readiness = uiState.deadliftProgression
+                )
                 Button(
                     onClick = { pendingProgression = ProgressionTarget.DEADLIFT },
+                    enabled = uiState.deadliftProgression.isReady,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Deadlift +5%")
                 }
+
+                ProgressionStatus(
+                    exerciseName = "RDL",
+                    readiness = uiState.rdlProgression
+                )
                 Button(
                     onClick = { pendingProgression = ProgressionTarget.RDL },
+                    enabled = uiState.rdlProgression.isReady,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("RDL +5%")
                 }
+
+                Text(
+                    "Completion is checked per programmed day, so extra sets on one day cannot make up for a missed set on another day.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
@@ -254,7 +273,7 @@ fun SettingsScreen(
             title = { Text("Increase $exerciseName by 5%?") },
             text = {
                 Text(
-                    "Every programmed $exerciseName weight from Sunday through Friday will be multiplied by 1.05 and rounded to 0.01 kg. Weight ranges keep both their minimum and maximum. Sets, reps and Saturday rest day will not change. The plate calculator will still show the nearest load you can build."
+                    "Every programmed $exerciseName weight from Sunday through Friday will be multiplied by 1.05 and rounded to 0.01 kg. Weight ranges keep both their minimum and maximum. Sets, reps and Saturday rest day will not change. After applying the increase, $exerciseName progression resets to 0/2 and requires two new full weeks before another +5%."
                 )
             },
             confirmButton = {
@@ -273,6 +292,34 @@ fun SettingsScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+}
+
+@Composable
+private fun ProgressionStatus(
+    exerciseName: String,
+    readiness: ProgressionReadiness
+) {
+    val status = if (readiness.isReady) {
+        "Ready · 2/2 full weeks"
+    } else {
+        "Locked · ${readiness.consecutiveFullWeeks}/${readiness.requiredFullWeeks} full weeks"
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            "$exerciseName: $status",
+            fontWeight = FontWeight.SemiBold,
+            color = if (readiness.isReady) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            readiness.latestCompletedWeekPercent?.let {
+                "Latest completed week: $it%"
+            } ?: "No completed qualifying week yet.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
