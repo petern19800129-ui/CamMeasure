@@ -35,6 +35,8 @@ data class TrainingSettings(
     val keepScreenOn: Boolean = false,
     val deadliftCooldownMinutes: Int = 60,
     val rdlCooldownMinutes: Int = 60,
+    val deadliftLastProgressionAtMillis: Long = 0L,
+    val rdlLastProgressionAtMillis: Long = 0L,
     // Transient training state. Intentionally not included in backup export.
     val deadliftNextLogAllowedAtMillis: Long = 0L,
     val rdlNextLogAllowedAtMillis: Long = 0L,
@@ -62,6 +64,8 @@ class SettingsRepository(
         val keepScreenOn = booleanPreferencesKey("keep_screen_on")
         val deadliftCooldownMinutes = intPreferencesKey("deadlift_cooldown_minutes")
         val rdlCooldownMinutes = intPreferencesKey("rdl_cooldown_minutes")
+        val deadliftLastProgressionAtMillis = longPreferencesKey("deadlift_last_progression_at_millis")
+        val rdlLastProgressionAtMillis = longPreferencesKey("rdl_last_progression_at_millis")
 
         val deadliftNextLogAllowedAtMillis = longPreferencesKey("deadlift_next_log_allowed_at_millis")
         val rdlNextLogAllowedAtMillis = longPreferencesKey("rdl_next_log_allowed_at_millis")
@@ -96,6 +100,22 @@ class SettingsRepository(
     suspend fun setWeeklyProgram(program: WeeklyProgram) {
         context.trainingSettingsDataStore.edit {
             it[Keys.weeklyProgram] = WeeklyProgramCodec.encode(program)
+        }
+    }
+
+    suspend fun applyWeeklyProgression(
+        exercise: Exercise,
+        program: WeeklyProgram,
+        appliedAtMillis: Long = System.currentTimeMillis()
+    ) {
+        context.trainingSettingsDataStore.edit { preferences ->
+            preferences[Keys.weeklyProgram] = WeeklyProgramCodec.encode(program)
+            when (exercise) {
+                Exercise.DEADLIFT ->
+                    preferences[Keys.deadliftLastProgressionAtMillis] = appliedAtMillis
+                Exercise.RDL ->
+                    preferences[Keys.rdlLastProgressionAtMillis] = appliedAtMillis
+            }
         }
     }
 
@@ -214,6 +234,10 @@ class SettingsRepository(
             preferences[Keys.keepScreenOn] = value.keepScreenOn
             preferences[Keys.deadliftCooldownMinutes] = value.deadliftCooldownMinutes.coerceIn(0, 240)
             preferences[Keys.rdlCooldownMinutes] = value.rdlCooldownMinutes.coerceIn(0, 240)
+            preferences[Keys.deadliftLastProgressionAtMillis] =
+                value.deadliftLastProgressionAtMillis.coerceAtLeast(0L)
+            preferences[Keys.rdlLastProgressionAtMillis] =
+                value.rdlLastProgressionAtMillis.coerceAtLeast(0L)
         }
     }
 
@@ -273,6 +297,10 @@ class SettingsRepository(
             keepScreenOn = preferences[Keys.keepScreenOn] ?: false,
             deadliftCooldownMinutes = preferences[Keys.deadliftCooldownMinutes] ?: 60,
             rdlCooldownMinutes = preferences[Keys.rdlCooldownMinutes] ?: 60,
+            deadliftLastProgressionAtMillis =
+                preferences[Keys.deadliftLastProgressionAtMillis] ?: 0L,
+            rdlLastProgressionAtMillis =
+                preferences[Keys.rdlLastProgressionAtMillis] ?: 0L,
             deadliftNextLogAllowedAtMillis = preferences[Keys.deadliftNextLogAllowedAtMillis] ?: 0L,
             rdlNextLogAllowedAtMillis = preferences[Keys.rdlNextLogAllowedAtMillis] ?: 0L,
             deadliftCooldownSourceLogTimestamp = preferences[Keys.deadliftCooldownSourceLogTimestamp] ?: 0L,
