@@ -113,14 +113,16 @@ fun DashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        "1-hour timers",
+                        "Log timers",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     CooldownStatusRow("Deadlift", uiState.deadliftCooldownRemainingMillis)
                     CooldownStatusRow("RDL", uiState.rdlCooldownRemainingMillis)
                     Text(
-                        "Each exercise has its own timer, so one Deadlift and one RDL set can be logged in the same hour.",
+                        if (uiState.settings.crossExerciseCooldownMinutes > 0)
+                            "Between-exercise gap: ${uiState.settings.crossExerciseCooldownMinutes} min. The longer of the own timer or this gap applies."
+                        else "Each exercise has its own timer; the between-exercise gap is off.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
