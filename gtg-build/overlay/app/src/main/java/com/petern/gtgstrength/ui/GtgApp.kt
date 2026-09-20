@@ -106,8 +106,7 @@ fun GtgApp(viewModel: GtgViewModel) {
                 )
             }
             if (result == SnackbarResult.ActionPerformed) {
-                viewModel.undoQuickLog(log)
-                requestWidgetRefresh(context)
+                viewModel.undoQuickLog(log) { requestWidgetRefresh(context) }
             } else if (result == null) {
                 snackbarHostState.currentSnackbarData?.dismiss()
             }
@@ -184,7 +183,9 @@ fun GtgApp(viewModel: GtgViewModel) {
                 uiState = uiState,
                 modifier = Modifier.padding(innerPadding),
                 onUpdateLog = viewModel::updateLog,
-                onDeleteLog = viewModel::deleteLog
+                onDeleteLog = { log ->
+                    viewModel.deleteLog(log) { requestWidgetRefresh(context) }
+                }
             )
 
             AppScreen.SETTINGS -> SettingsScreen(
