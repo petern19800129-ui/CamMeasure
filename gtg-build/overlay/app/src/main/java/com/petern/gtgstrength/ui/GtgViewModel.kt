@@ -22,6 +22,7 @@ import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
@@ -182,9 +183,9 @@ class GtgViewModel(
             weekDays = weekDays,
             logs = logs,
             deadliftCooldownRemainingMillis =
-                (settings.deadliftNextLogAllowedAtMillis - nowMillis).coerceAtLeast(0L),
+                (settings.nextLogAllowedAtMillis(Exercise.DEADLIFT) - nowMillis).coerceAtLeast(0L),
             rdlCooldownRemainingMillis =
-                (settings.rdlNextLogAllowedAtMillis - nowMillis).coerceAtLeast(0L),
+                (settings.nextLogAllowedAtMillis(Exercise.RDL) - nowMillis).coerceAtLeast(0L),
             deadliftProgression = deadliftProgression,
             rdlProgression = rdlProgression
         )
@@ -256,6 +257,22 @@ class GtgViewModel(
         }
     }
 
+    fun setCrossExerciseCooldownMinutes(value: Int, onChanged: () -> Unit = {}) {
+        viewModelScope.launch {
+            val logs = trainingRepository.logs.first()
+            settingsRepository.setCrossExerciseCooldownMinutes(
+                minutes = value,
+                lastDeadliftLogAtMillis = logs.filter {
+                    it.exercise == Exercise.DEADLIFT.storedName
+                }.maxOfOrNull { it.timestamp } ?: 0L,
+                lastRdlLogAtMillis = logs.filter {
+                    it.exercise == Exercise.RDL.storedName
+                }.maxOfOrNull { it.timestamp } ?: 0L
+            )
+            onChanged()
+        }
+    }
+
     fun quickLog(
         exercise: Exercise,
         weightKg: Double,
@@ -291,7 +308,12 @@ class GtgViewModel(
                 )
                 onLogged(logged)
             } catch (error: Exception) {
-                settingsRepository.clearLogCooldownIfSource(exercise, sourceTimestamp)
+                val previousLog = trainingRepository.logs.first()
+                    .filter { it.exercise == exercise.storedName && it.timestamp < sourceTimestamp }
+                    .maxOfOrNull { it.timestamp } ?: 0L
+                settingsRepository.clearLogCooldownIfSource(
+                    exercise, sourceTimestamp, previousLog
+                )
                 throw error
             }
         }
@@ -304,7 +326,12 @@ class GtgViewModel(
         viewModelScope.launch {
             trainingRepository.delete(log)
             val exercise = Exercise.fromStoredName(log.exercise)
-            settingsRepository.clearLogCooldownIfSource(exercise, log.timestamp)
+            val previousLog = trainingRepository.logs.first()
+                .filter { it.exercise == exercise.storedName && it.timestamp < log.timestamp }
+                .maxOfOrNull { it.timestamp } ?: 0L
+            settingsRepository.clearLogCooldownIfSource(
+                exercise, log.timestamp, previousLog
+            )
             onUndone()
         }
     }
@@ -321,7 +348,16 @@ class GtgViewModel(
     }
 
     fun deleteLog(log: TrainingLogEntity) {
-        viewModelScope.launch { trainingRepository.delete(log) }
+        viewModelScope.launch {
+            trainingRepository.delete(log)
+            val exercise = Exercise.fromStoredName(log.exercise)
+            val previousLog = trainingRepository.logs.first()
+                .filter { it.exercise == exercise.storedName && it.timestamp < log.timestamp }
+                .maxOfOrNull { it.timestamp } ?: 0L
+            settingsRepository.clearLogCooldownIfSource(
+                exercise, log.timestamp, previousLog
+            )
+        }
     }
 
     fun createBackupJson(): String {
@@ -329,7 +365,7 @@ class GtgViewModel(
         val settings = state.settings
         val root = JSONObject()
             .put("app", "GTG Strength")
-            .put("version", 7)
+            .put("version", 8)
             .put("exportedAt", System.currentTimeMillis())
             .put(
                 "settings",
@@ -344,6 +380,7 @@ class GtgViewModel(
                     .put("keepScreenOn", settings.keepScreenOn)
                     .put("deadliftCooldownMinutes", settings.deadliftCooldownMinutes)
                     .put("rdlCooldownMinutes", settings.rdlCooldownMinutes)
+                    .put("crossExerciseCooldownMinutes", settings.crossExerciseCooldownMinutes)
                     .put("deadliftLastProgressionAtMillis", settings.deadliftLastProgressionAtMillis)
                     .put("rdlLastProgressionAtMillis", settings.rdlLastProgressionAtMillis)
             )
@@ -369,7 +406,7 @@ class GtgViewModel(
             try {
                 val root = JSONObject(json)
                 val version = root.optInt("version", -1)
-                require(version in 1..7) { "Unsupported backup version" }
+                require(version in 1..8) { "Unsupported backup version" }
                 val saved = root.getJSONObject("settings")
                 val current = uiState.value.settings
 
@@ -406,6 +443,11 @@ class GtgViewModel(
                             "rdlCooldownMinutes",
                             current.rdlCooldownMinutes
                         ).coerceIn(0, 240),
+                        crossExerciseCooldownMinutes = if (version >= 8) {
+                            saved.optInt("crossExerciseCooldownMinutes", 0).coerceIn(0, 240)
+                        } else {
+                            current.crossExerciseCooldownMinutes
+                        },
                         deadliftLastProgressionAtMillis = if (version >= 7) {
                             saved.optLong("deadliftLastProgressionAtMillis", 0L).coerceAtLeast(0L)
                         } else {
