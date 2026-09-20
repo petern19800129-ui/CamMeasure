@@ -89,6 +89,7 @@ jobs:
               'android.permission.RECEIVE_BOOT_COMPLETED',
               'android.permission.FOREGROUND_SERVICE',
               'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
+              'android.permission.SCHEDULE_EXACT_ALARM',
           ]:
               if not any(
                   item.get(f'{{{android_ns}}}name') == permission_name
