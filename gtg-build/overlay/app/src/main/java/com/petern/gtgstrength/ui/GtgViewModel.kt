@@ -354,7 +354,7 @@ class GtgViewModel(
         }
     }
 
-    fun deleteLog(log: TrainingLogEntity) {
+    fun deleteLog(log: TrainingLogEntity, onChanged: () -> Unit = {}) {
         viewModelScope.launch {
             trainingRepository.delete(log)
             val exercise = Exercise.fromStoredName(log.exercise)
@@ -364,6 +364,7 @@ class GtgViewModel(
             settingsRepository.clearLogCooldownIfSource(
                 exercise, log.timestamp, previousLog
             )
+            onChanged()
         }
     }
 
