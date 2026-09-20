@@ -62,7 +62,8 @@ fun SettingsScreen(
     onDeadliftCooldownMinutesChange: (Int) -> Unit,
     onRdlCooldownMinutesChange: (Int) -> Unit,
     onCrossExerciseCooldownMinutesChange: (Int) -> Unit,
-    onCooldownAlarmEnabledChange: (Boolean) -> Unit
+    onCooldownAlarmEnabledChange: (Boolean) -> Unit,
+    onTestCooldownAlarm: () -> Unit
 ) {
     var editingDay by remember { mutableStateOf<DayPlan?>(null) }
     var editingEquipment by remember { mutableStateOf(false) }
@@ -108,7 +109,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                         Text("Timer-finished alarm", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Play a notification sound and vibrate when an exercise becomes available. Android notification permission is required; delivery may be delayed by battery saving.",
+                            "Repeat the alarm sound and vibration until you tap STOP ALARM. Android notification permission is required; battery saving may delay the start.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -117,6 +118,11 @@ fun SettingsScreen(
                         checked = uiState.settings.cooldownAlarmEnabled,
                         onCheckedChange = onCooldownAlarmEnabledChange
                     )
+                }
+                if (uiState.settings.cooldownAlarmEnabled) {
+                    OutlinedButton(onClick = onTestCooldownAlarm, modifier = Modifier.fillMaxWidth()) {
+                        Text("TEST ALARM")
+                    }
                 }
                 Text(
                     "Independent Deadlift and RDL timers plus an optional gap between exercises. Set a timer to 0 minutes to disable it.",
