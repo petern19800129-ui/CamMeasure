@@ -47,11 +47,23 @@ object CooldownAlarms {
             // alarm. Never cancel an already-due notification before it fires.
             if (dueAt <= now) continue
             val scheduled = timerPendingIntent(context, exercise, dueAt)
-            manager.setAndAllowWhileIdle(
-                AlarmManager.ELAPSED_REALTIME,
-                SystemClock.elapsedRealtime() + (dueAt - now) + 1_000L,
-                scheduled
-            )
+            val elapsedDue = SystemClock.elapsedRealtime() + (dueAt - now) + 1_000L
+            // An exact, user-requested alarm permits starting the ringing
+            // foreground service even while Android considers us backgrounded.
+            // Without special alarm access, keep the earlier inexact behavior.
+            if (Build.VERSION.SDK_INT < 31 || manager.canScheduleExactAlarms()) {
+                manager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    elapsedDue,
+                    scheduled
+                )
+            } else {
+                manager.setAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    elapsedDue,
+                    scheduled
+                )
+            }
         }
     }
 
