@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Context
+import android.content.Intent
 import android.content.ContextWrapper
 import android.view.WindowManager
 import android.widget.Toast
@@ -37,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.petern.gtgstrength.alarms.CooldownAlarmActivity
+import com.petern.gtgstrength.alarms.CooldownRingingService
 import com.petern.gtgstrength.data.TrainingLogEntity
 import com.petern.gtgstrength.domain.Exercise
 import com.petern.gtgstrength.util.performStrongLogHaptic
@@ -205,7 +208,21 @@ fun GtgApp(viewModel: GtgViewModel) {
                     ) {
                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     } else {
-                        viewModel.setCooldownAlarmEnabled(enabled) { requestWidgetRefresh(context) }
+                        viewModel.setCooldownAlarmEnabled(enabled) {
+                            if (!enabled) CooldownRingingService.stop(context)
+                            requestWidgetRefresh(context)
+                        }
+                    }
+                },
+                onTestCooldownAlarm = {
+                    try {
+                        CooldownRingingService.test(context)
+                        context.startActivity(
+                            Intent(context, CooldownAlarmActivity::class.java)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    } catch (error: RuntimeException) {
+                        Toast.makeText(context, "Cannot start alarm: ${error.message}", Toast.LENGTH_LONG).show()
                     }
                 },
                 onDeadliftCooldownMinutesChange = { minutes ->
