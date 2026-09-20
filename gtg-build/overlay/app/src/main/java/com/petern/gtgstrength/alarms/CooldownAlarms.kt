@@ -80,6 +80,16 @@ object CooldownAlarms {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         if (!manager.areNotificationsEnabled()) return
 
+        // Start the ongoing alarm instead of posting a one-shot notification.
+        // If Android disallows foreground-service startup, retain the original
+        // one-shot notification as a fallback rather than silently losing it.
+        try {
+            CooldownRingingService.ring(context, exercise)
+            return
+        } catch (_: RuntimeException) {
+            // Foreground services can be restricted by some device policies.
+        }
+
         if (Build.VERSION.SDK_INT >= 26) {
             manager.createNotificationChannel(
                 NotificationChannel(
