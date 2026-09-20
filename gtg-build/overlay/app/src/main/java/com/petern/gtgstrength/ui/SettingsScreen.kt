@@ -60,7 +60,8 @@ fun SettingsScreen(
     onEquipmentChange: (BarbellEquipment) -> Unit,
     onKeepScreenOnChange: (Boolean) -> Unit,
     onDeadliftCooldownMinutesChange: (Int) -> Unit,
-    onRdlCooldownMinutesChange: (Int) -> Unit
+    onRdlCooldownMinutesChange: (Int) -> Unit,
+    onCrossExerciseCooldownMinutesChange: (Int) -> Unit
 ) {
     var editingDay by remember { mutableStateOf<DayPlan?>(null) }
     var editingEquipment by remember { mutableStateOf(false) }
@@ -100,7 +101,7 @@ fun SettingsScreen(
             ) {
                 Text("Log timers", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Each exercise has its own lockout timer after a successful log. Set a timer to 0 minutes to disable its lockout.",
+                    "Independent Deadlift and RDL timers plus an optional gap between exercises. Set a timer to 0 minutes to disable it.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -133,6 +134,26 @@ fun SettingsScreen(
                     },
                     valueRange = 0f..240f,
                     steps = 47
+                )
+
+                Text(
+                    if (uiState.settings.crossExerciseCooldownMinutes == 0) "Between Deadlift & RDL: Off"
+                    else "Between Deadlift & RDL: ${uiState.settings.crossExerciseCooldownMinutes} min",
+                    fontWeight = FontWeight.SemiBold
+                )
+                Slider(
+                    value = uiState.settings.crossExerciseCooldownMinutes.toFloat(),
+                    onValueChange = { raw ->
+                        val rounded = ((raw / 5f).roundToInt() * 5).coerceIn(0, 240)
+                        onCrossExerciseCooldownMinutesChange(rounded)
+                    },
+                    valueRange = 0f..240f,
+                    steps = 47
+                )
+                Text(
+                    "After logging either exercise, the other must wait this long. Its own timer still applies; the longer remaining wait wins.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
