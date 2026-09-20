@@ -1,6 +1,11 @@
 package com.petern.gtgstrength.ui
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Context
 import android.content.ContextWrapper
 import android.view.WindowManager
@@ -56,6 +61,15 @@ fun GtgApp(viewModel: GtgViewModel) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.setCooldownAlarmEnabled(true) { requestWidgetRefresh(context) }
+        } else {
+            Toast.makeText(context, "Allow GTG notifications to hear timer alarms.", Toast.LENGTH_LONG).show()
+        }
+    }
     var quickLogPopupJob by remember { mutableStateOf<Job?>(null) }
 
     // Apply KEEP_SCREEN_ON to the actual Activity window. This is more reliable
@@ -184,6 +198,15 @@ fun GtgApp(viewModel: GtgViewModel) {
                 onRdlIncreaseFive = viewModel::increaseRdlProgramByFivePercent,
                 onEquipmentChange = viewModel::setBarbellEquipment,
                 onKeepScreenOnChange = viewModel::setKeepScreenOn,
+                onCooldownAlarmEnabledChange = { enabled ->
+                    if (enabled && Build.VERSION.SDK_INT >= 33 &&
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        viewModel.setCooldownAlarmEnabled(enabled) { requestWidgetRefresh(context) }
+                    }
+                },
                 onDeadliftCooldownMinutesChange = { minutes ->
                     viewModel.setDeadliftCooldownMinutes(minutes) {
                         requestWidgetRefresh(context)
@@ -205,7 +228,12 @@ fun GtgApp(viewModel: GtgViewModel) {
                 uiState = uiState,
                 modifier = Modifier.padding(innerPadding),
                 createBackupJson = viewModel::createBackupJson,
-                onRestoreBackup = viewModel::restoreBackupJson,
+                onRestoreBackup = { json, onResult ->
+                    viewModel.restoreBackupJson(json) { result ->
+                        requestWidgetRefresh(context)
+                        onResult(result)
+                    }
+                },
                 onRebuildProgress = viewModel::rebuildProgress
             )
         }
