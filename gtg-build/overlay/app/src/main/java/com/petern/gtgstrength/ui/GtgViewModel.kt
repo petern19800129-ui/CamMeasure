@@ -243,6 +243,13 @@ class GtgViewModel(
         viewModelScope.launch { settingsRepository.setKeepScreenOn(enabled) }
     }
 
+    fun setCooldownAlarmEnabled(enabled: Boolean, onChanged: () -> Unit = {}) {
+        viewModelScope.launch {
+            settingsRepository.setCooldownAlarmEnabled(enabled)
+            onChanged()
+        }
+    }
+
     fun setDeadliftCooldownMinutes(value: Int, onChanged: () -> Unit = {}) {
         viewModelScope.launch {
             settingsRepository.setCooldownMinutes(Exercise.DEADLIFT, value)
@@ -365,7 +372,7 @@ class GtgViewModel(
         val settings = state.settings
         val root = JSONObject()
             .put("app", "GTG Strength")
-            .put("version", 8)
+            .put("version", 9)
             .put("exportedAt", System.currentTimeMillis())
             .put(
                 "settings",
@@ -381,6 +388,7 @@ class GtgViewModel(
                     .put("deadliftCooldownMinutes", settings.deadliftCooldownMinutes)
                     .put("rdlCooldownMinutes", settings.rdlCooldownMinutes)
                     .put("crossExerciseCooldownMinutes", settings.crossExerciseCooldownMinutes)
+                    .put("cooldownAlarmEnabled", settings.cooldownAlarmEnabled)
                     .put("deadliftLastProgressionAtMillis", settings.deadliftLastProgressionAtMillis)
                     .put("rdlLastProgressionAtMillis", settings.rdlLastProgressionAtMillis)
             )
@@ -406,7 +414,7 @@ class GtgViewModel(
             try {
                 val root = JSONObject(json)
                 val version = root.optInt("version", -1)
-                require(version in 1..8) { "Unsupported backup version" }
+                require(version in 1..9) { "Unsupported backup version" }
                 val saved = root.getJSONObject("settings")
                 val current = uiState.value.settings
 
@@ -447,6 +455,11 @@ class GtgViewModel(
                             saved.optInt("crossExerciseCooldownMinutes", 0).coerceIn(0, 240)
                         } else {
                             current.crossExerciseCooldownMinutes
+                        },
+                        cooldownAlarmEnabled = if (version >= 9) {
+                            saved.optBoolean("cooldownAlarmEnabled", false)
+                        } else {
+                            current.cooldownAlarmEnabled
                         },
                         deadliftLastProgressionAtMillis = if (version >= 7) {
                             saved.optLong("deadliftLastProgressionAtMillis", 0L).coerceAtLeast(0L)
