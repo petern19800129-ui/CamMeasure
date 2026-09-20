@@ -36,6 +36,7 @@ data class TrainingSettings(
     val deadliftCooldownMinutes: Int = 60,
     val rdlCooldownMinutes: Int = 60,
     val crossExerciseCooldownMinutes: Int = 0,
+    val cooldownAlarmEnabled: Boolean = false,
     val deadliftLastProgressionAtMillis: Long = 0L,
     val rdlLastProgressionAtMillis: Long = 0L,
     // Transient training state. Intentionally not included in backup export.
@@ -81,6 +82,7 @@ class SettingsRepository(
         val deadliftCooldownMinutes = intPreferencesKey("deadlift_cooldown_minutes")
         val rdlCooldownMinutes = intPreferencesKey("rdl_cooldown_minutes")
         val crossExerciseCooldownMinutes = intPreferencesKey("cross_exercise_cooldown_minutes")
+        val cooldownAlarmEnabled = booleanPreferencesKey("cooldown_alarm_enabled")
         val deadliftLastProgressionAtMillis = longPreferencesKey("deadlift_last_progression_at_millis")
         val rdlLastProgressionAtMillis = longPreferencesKey("rdl_last_progression_at_millis")
 
@@ -150,6 +152,12 @@ class SettingsRepository(
     suspend fun setKeepScreenOn(enabled: Boolean) {
         context.trainingSettingsDataStore.edit {
             it[Keys.keepScreenOn] = enabled
+        }
+    }
+
+    suspend fun setCooldownAlarmEnabled(enabled: Boolean) {
+        context.trainingSettingsDataStore.edit { preferences ->
+            preferences[Keys.cooldownAlarmEnabled] = enabled
         }
     }
 
@@ -273,6 +281,7 @@ class SettingsRepository(
             preferences[Keys.rdlCooldownMinutes] = value.rdlCooldownMinutes.coerceIn(0, 240)
             preferences[Keys.crossExerciseCooldownMinutes] =
                 value.crossExerciseCooldownMinutes.coerceIn(0, 240)
+            preferences[Keys.cooldownAlarmEnabled] = value.cooldownAlarmEnabled
             preferences[Keys.deadliftLastProgressionAtMillis] =
                 value.deadliftLastProgressionAtMillis.coerceAtLeast(0L)
             preferences[Keys.rdlLastProgressionAtMillis] =
@@ -337,6 +346,7 @@ class SettingsRepository(
             deadliftCooldownMinutes = preferences[Keys.deadliftCooldownMinutes] ?: 60,
             rdlCooldownMinutes = preferences[Keys.rdlCooldownMinutes] ?: 60,
             crossExerciseCooldownMinutes = preferences[Keys.crossExerciseCooldownMinutes] ?: 0,
+            cooldownAlarmEnabled = preferences[Keys.cooldownAlarmEnabled] ?: false,
             deadliftLastProgressionAtMillis =
                 preferences[Keys.deadliftLastProgressionAtMillis] ?: 0L,
             rdlLastProgressionAtMillis =
