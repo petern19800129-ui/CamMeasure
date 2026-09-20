@@ -2,12 +2,15 @@ package com.petern.gtgstrength.ui
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlarmManager
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.content.ContextWrapper
 import android.view.WindowManager
 import android.widget.Toast
@@ -64,11 +67,31 @@ fun GtgApp(viewModel: GtgViewModel) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
+    var exactAlarmAccessGranted by remember {
+        mutableStateOf(Build.VERSION.SDK_INT < 31 ||
+            (context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true))
+    }
+    val preciseAlarmLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        exactAlarmAccessGranted = Build.VERSION.SDK_INT < 31 ||
+            (context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true)
+        requestWidgetRefresh(context)
+    }
+    fun requestPreciseAlarmAccess() {
+        if (Build.VERSION.SDK_INT >= 31 && !exactAlarmAccessGranted) {
+            preciseAlarmLauncher.launch(
+                Intent(AlarmManager.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                    .setData(Uri.parse("package:${context.packageName}"))
+            )
+        }
+    }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
             viewModel.setCooldownAlarmEnabled(true) { requestWidgetRefresh(context) }
+            requestPreciseAlarmAccess()
         } else {
             Toast.makeText(context, "Allow GTG notifications to hear timer alarms.", Toast.LENGTH_LONG).show()
         }
@@ -212,8 +235,11 @@ fun GtgApp(viewModel: GtgViewModel) {
                             if (!enabled) CooldownRingingService.stop(context)
                             requestWidgetRefresh(context)
                         }
+                        if (enabled) requestPreciseAlarmAccess()
                     }
                 },
+                exactAlarmAccessGranted = exactAlarmAccessGranted,
+                onRequestExactAlarmAccess = ::requestPreciseAlarmAccess,
                 onTestCooldownAlarm = {
                     try {
                         CooldownRingingService.test(context)
