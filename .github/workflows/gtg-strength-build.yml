@@ -52,6 +52,7 @@ jobs:
           sed -i 's/compose-bom:2026.08.00/compose-bom:2026.06.00/g' gtg-build/project/GTGStrength/app/build.gradle.kts
 
           # Overlay GTG v29 with looping, manually dismissible workout alarms.
+          # Include Android precise-alarm permission and stop controls.
           cp -a gtg-build/overlay/app/src/main/java/. gtg-build/project/GTGStrength/app/src/main/java/
           if [ -d gtg-build/overlay/app/src/main/res ]; then
             cp -a gtg-build/overlay/app/src/main/res/. gtg-build/project/GTGStrength/app/src/main/res/
