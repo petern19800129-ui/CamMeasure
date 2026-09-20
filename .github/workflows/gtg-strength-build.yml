@@ -53,6 +53,7 @@ jobs:
 
           # Overlay GTG v29 with looping, manually dismissible workout alarms.
           # Include Android precise-alarm permission and stop controls.
+          # Fix Android permission intent for precise-alarm settings.
           cp -a gtg-build/overlay/app/src/main/java/. gtg-build/project/GTGStrength/app/src/main/java/
           if [ -d gtg-build/overlay/app/src/main/res ]; then
             cp -a gtg-build/overlay/app/src/main/res/. gtg-build/project/GTGStrength/app/src/main/res/
