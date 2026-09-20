@@ -81,7 +81,7 @@ fun GtgApp(viewModel: GtgViewModel) {
     fun requestPreciseAlarmAccess() {
         if (Build.VERSION.SDK_INT >= 31 && !exactAlarmAccessGranted) {
             preciseAlarmLauncher.launch(
-                Intent(AlarmManager.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
                     .setData(Uri.parse("package:${context.packageName}"))
             )
         }
