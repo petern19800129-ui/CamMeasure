@@ -38,10 +38,14 @@ object CooldownAlarms {
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
         val now = System.currentTimeMillis()
         for (exercise in Exercise.entries) {
-            val intent = timerPendingIntent(context, exercise)
-            manager.cancel(intent)
             val dueAt = settings.nextLogAllowedAtMillis(exercise)
-            if (!settings.cooldownAlarmEnabled || dueAt <= now) continue
+            if (!settings.cooldownAlarmEnabled || dueAt <= 0L) {
+                manager.cancel(timerPendingIntent(context, exercise))
+                continue
+            }
+            // The widget's refresh alarm may run just before our notification
+            // alarm. Never cancel an already-due notification before it fires.
+            if (dueAt <= now) continue
             val scheduled = timerPendingIntent(context, exercise, dueAt)
             manager.setAndAllowWhileIdle(
                 AlarmManager.ELAPSED_REALTIME,
