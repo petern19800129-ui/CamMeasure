@@ -35,6 +35,7 @@ data class TrainingSettings(
     val keepScreenOn: Boolean = false,
     val deadliftCooldownMinutes: Int = 60,
     val rdlCooldownMinutes: Int = 60,
+    val crossExerciseCooldownMinutes: Int = 0,
     val deadliftLastProgressionAtMillis: Long = 0L,
     val rdlLastProgressionAtMillis: Long = 0L,
     // Transient training state. Intentionally not included in backup export.
@@ -42,7 +43,22 @@ data class TrainingSettings(
     val rdlNextLogAllowedAtMillis: Long = 0L,
     val deadliftCooldownSourceLogTimestamp: Long = 0L,
     val rdlCooldownSourceLogTimestamp: Long = 0L
-)
+) {
+    fun nextLogAllowedAtMillis(exercise: Exercise): Long {
+        val ownUntil = when (exercise) {
+            Exercise.DEADLIFT -> deadliftNextLogAllowedAtMillis
+            Exercise.RDL -> rdlNextLogAllowedAtMillis
+        }
+        val lastOther = when (exercise) {
+            Exercise.DEADLIFT -> rdlCooldownSourceLogTimestamp
+            Exercise.RDL -> deadliftCooldownSourceLogTimestamp
+        }
+        val otherUntil = if (crossExerciseCooldownMinutes > 0 && lastOther > 0L) {
+            lastOther + crossExerciseCooldownMinutes.coerceIn(0, 240) * 60_000L
+        } else 0L
+        return maxOf(ownUntil, otherUntil)
+    }
+}
 
 class SettingsRepository(
     private val context: Context
@@ -64,6 +80,7 @@ class SettingsRepository(
         val keepScreenOn = booleanPreferencesKey("keep_screen_on")
         val deadliftCooldownMinutes = intPreferencesKey("deadlift_cooldown_minutes")
         val rdlCooldownMinutes = intPreferencesKey("rdl_cooldown_minutes")
+        val crossExerciseCooldownMinutes = intPreferencesKey("cross_exercise_cooldown_minutes")
         val deadliftLastProgressionAtMillis = longPreferencesKey("deadlift_last_progression_at_millis")
         val rdlLastProgressionAtMillis = longPreferencesKey("rdl_last_progression_at_millis")
 
@@ -136,6 +153,25 @@ class SettingsRepository(
         }
     }
 
+    suspend fun setCrossExerciseCooldownMinutes(
+        minutes: Int,
+        lastDeadliftLogAtMillis: Long = 0L,
+        lastRdlLogAtMillis: Long = 0L
+    ) {
+        context.trainingSettingsDataStore.edit { preferences ->
+            preferences[Keys.crossExerciseCooldownMinutes] = minutes.coerceIn(0, 240)
+            // Incorporate existing log history when the setting is first enabled.
+            preferences[Keys.deadliftCooldownSourceLogTimestamp] = maxOf(
+                preferences[Keys.deadliftCooldownSourceLogTimestamp] ?: 0L,
+                lastDeadliftLogAtMillis.coerceAtLeast(0L)
+            )
+            preferences[Keys.rdlCooldownSourceLogTimestamp] = maxOf(
+                preferences[Keys.rdlCooldownSourceLogTimestamp] ?: 0L,
+                lastRdlLogAtMillis.coerceAtLeast(0L)
+            )
+        }
+    }
+
     suspend fun setCooldownMinutes(exercise: Exercise, minutes: Int) {
         val safeMinutes = minutes.coerceIn(0, 240)
         context.trainingSettingsDataStore.edit { preferences ->
@@ -147,7 +183,7 @@ class SettingsRepository(
             val sourceTimestamp = preferences[sourceKey] ?: 0L
             if (safeMinutes == 0) {
                 preferences[nextKey] = 0L
-                preferences[sourceKey] = 0L
+                // Preserve the last log time for the cross-exercise timer.
             } else if (sourceTimestamp > 0L) {
                 preferences[nextKey] = sourceTimestamp + safeMinutes * 60_000L
             }
@@ -155,9 +191,8 @@ class SettingsRepository(
     }
 
     /**
-     * Atomically reserves the one-hour logging window for one exercise.
-     * Deadlift and RDL have independent cooldowns, so one of each may be logged
-     * during the same hour.
+     * Atomically checks both the exercise's own timer and the adjustable
+     * cross-exercise gap. Both the app and widget use this same reservation.
      */
     suspend fun tryStartLogCooldown(
         exercise: Exercise,
@@ -168,16 +203,21 @@ class SettingsRepository(
         context.trainingSettingsDataStore.edit { preferences ->
             val nextKey = nextAllowedKey(exercise)
             val sourceKey = sourceTimestampKey(exercise)
-            val currentUntil = preferences[nextKey] ?: 0L
+            val otherKey = sourceTimestampKey(
+                if (exercise == Exercise.DEADLIFT) Exercise.RDL else Exercise.DEADLIFT
+            )
+            val lastOther = preferences[otherKey] ?: 0L
+            val gapMinutes = (preferences[Keys.crossExerciseCooldownMinutes] ?: 0).coerceIn(0, 240)
+            val crossUntil = if (lastOther > 0L && gapMinutes > 0) {
+                lastOther + gapMinutes * 60_000L
+            } else 0L
+            val currentUntil = maxOf(preferences[nextKey] ?: 0L, crossUntil)
             if (currentUntil <= nowMillis) {
                 val durationMinutes = (preferences[cooldownMinutesKey(exercise)] ?: 60).coerceIn(0, 240)
-                if (durationMinutes == 0) {
-                    preferences[nextKey] = 0L
-                    preferences[sourceKey] = 0L
-                } else {
-                    preferences[nextKey] = nowMillis + durationMinutes * 60_000L
-                    preferences[sourceKey] = sourceLogTimestamp
-                }
+                preferences[nextKey] = if (durationMinutes == 0) 0L
+                    else nowMillis + durationMinutes * 60_000L
+                // Also keep last successful log timestamp when own timer is disabled.
+                preferences[sourceKey] = sourceLogTimestamp
                 acquired = true
             }
         }
@@ -190,7 +230,8 @@ class SettingsRepository(
      */
     suspend fun clearLogCooldownIfSource(
         exercise: Exercise,
-        sourceLogTimestamp: Long
+        sourceLogTimestamp: Long,
+        previousLogTimestamp: Long = 0L
     ) {
         context.trainingSettingsDataStore.edit { preferences ->
             val nextKey = nextAllowedKey(exercise)
@@ -198,7 +239,7 @@ class SettingsRepository(
             val source = preferences[sourceKey] ?: 0L
             if (source == sourceLogTimestamp) {
                 preferences[nextKey] = 0L
-                preferences[sourceKey] = 0L
+                preferences[sourceKey] = previousLogTimestamp.coerceIn(0L, sourceLogTimestamp)
             }
         }
     }
@@ -208,11 +249,7 @@ class SettingsRepository(
         nowMillis: Long = System.currentTimeMillis()
     ): Long {
         val current = settings.first()
-        val nextAllowed = when (exercise) {
-            Exercise.DEADLIFT -> current.deadliftNextLogAllowedAtMillis
-            Exercise.RDL -> current.rdlNextLogAllowedAtMillis
-        }
-        return (nextAllowed - nowMillis).coerceAtLeast(0L)
+        return (current.nextLogAllowedAtMillis(exercise) - nowMillis).coerceAtLeast(0L)
     }
 
     /**
@@ -234,6 +271,8 @@ class SettingsRepository(
             preferences[Keys.keepScreenOn] = value.keepScreenOn
             preferences[Keys.deadliftCooldownMinutes] = value.deadliftCooldownMinutes.coerceIn(0, 240)
             preferences[Keys.rdlCooldownMinutes] = value.rdlCooldownMinutes.coerceIn(0, 240)
+            preferences[Keys.crossExerciseCooldownMinutes] =
+                value.crossExerciseCooldownMinutes.coerceIn(0, 240)
             preferences[Keys.deadliftLastProgressionAtMillis] =
                 value.deadliftLastProgressionAtMillis.coerceAtLeast(0L)
             preferences[Keys.rdlLastProgressionAtMillis] =
@@ -297,6 +336,7 @@ class SettingsRepository(
             keepScreenOn = preferences[Keys.keepScreenOn] ?: false,
             deadliftCooldownMinutes = preferences[Keys.deadliftCooldownMinutes] ?: 60,
             rdlCooldownMinutes = preferences[Keys.rdlCooldownMinutes] ?: 60,
+            crossExerciseCooldownMinutes = preferences[Keys.crossExerciseCooldownMinutes] ?: 0,
             deadliftLastProgressionAtMillis =
                 preferences[Keys.deadliftLastProgressionAtMillis] ?: 0L,
             rdlLastProgressionAtMillis =
