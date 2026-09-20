@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
 import com.petern.gtgstrength.GtgApplication
+import com.petern.gtgstrength.alarms.CooldownAlarms
 import com.petern.gtgstrength.R
 import com.petern.gtgstrength.data.PlateCalculator
 import com.petern.gtgstrength.data.TrainingLogEntity
@@ -159,6 +160,8 @@ private object GtgWidgetController {
     suspend fun refreshAll(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
         val snapshot = load(context)
+        // Reconcile both background alerts independently of widget installation.
+        CooldownAlarms.reconcile(context, snapshot.settings)
         if (snapshot.deadliftCooldownRemainingMillis > 0L) {
             scheduleCooldownRefresh(
                 context,
