@@ -51,8 +51,8 @@ jobs:
           sed -i 's/compileSdk = 37/compileSdk = 36/' gtg-build/project/GTGStrength/app/build.gradle.kts
           sed -i 's/compose-bom:2026.08.00/compose-bom:2026.06.00/g' gtg-build/project/GTGStrength/app/build.gradle.kts
 
-          # Overlay the latest GTG sources. v26 locks +5% progression until
-          # each exercise has two consecutive 100% completed logged weeks.
+          # Overlay the latest GTG sources. v27 adds an adjustable lockout
+          # between Deadlift and RDL shared by the app and home-screen widgets.
           cp -a gtg-build/overlay/app/src/main/java/. gtg-build/project/GTGStrength/app/src/main/java/
           if [ -d gtg-build/overlay/app/src/main/res ]; then
             cp -a gtg-build/overlay/app/src/main/res/. gtg-build/project/GTGStrength/app/src/main/res/
@@ -144,7 +144,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GTGStrength-v26-apk
+          name: GTGStrength-v27-apk
           path: gtg-build/project/GTGStrength/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
