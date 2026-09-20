@@ -63,7 +63,9 @@ fun SettingsScreen(
     onRdlCooldownMinutesChange: (Int) -> Unit,
     onCrossExerciseCooldownMinutesChange: (Int) -> Unit,
     onCooldownAlarmEnabledChange: (Boolean) -> Unit,
-    onTestCooldownAlarm: () -> Unit
+    onTestCooldownAlarm: () -> Unit,
+    exactAlarmAccessGranted: Boolean,
+    onRequestExactAlarmAccess: () -> Unit
 ) {
     var editingDay by remember { mutableStateOf<DayPlan?>(null) }
     var editingEquipment by remember { mutableStateOf(false) }
@@ -120,6 +122,17 @@ fun SettingsScreen(
                     )
                 }
                 if (uiState.settings.cooldownAlarmEnabled) {
+                    if (!exactAlarmAccessGranted) {
+                        Text(
+                            "Allow 'Alarms & reminders' so Android can start a repeating alarm while the app is closed. Otherwise, only a brief fallback notification may appear.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        OutlinedButton(
+                            onClick = onRequestExactAlarmAccess,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("ALLOW PRECISE ALARMS") }
+                    }
                     OutlinedButton(onClick = onTestCooldownAlarm, modifier = Modifier.fillMaxWidth()) {
                         Text("TEST ALARM")
                     }
