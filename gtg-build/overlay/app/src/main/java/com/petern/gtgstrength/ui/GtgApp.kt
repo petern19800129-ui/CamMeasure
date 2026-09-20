@@ -193,6 +193,11 @@ fun GtgApp(viewModel: GtgViewModel) {
                     viewModel.setRdlCooldownMinutes(minutes) {
                         requestWidgetRefresh(context)
                     }
+                },
+                onCrossExerciseCooldownMinutesChange = { minutes ->
+                    viewModel.setCrossExerciseCooldownMinutes(minutes) {
+                        requestWidgetRefresh(context)
+                    }
                 }
             )
 
