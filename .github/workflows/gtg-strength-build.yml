@@ -54,6 +54,7 @@ jobs:
           # Overlay the latest GTG sources. v28 adds opt-in cooldown-ready alerts
           # using background alarms and Android notifications.
           # Rebuild after the finished-timer/widget-refresh race fix.
+          # Include alarm reconciliation after undo and history deletion.
           cp -a gtg-build/overlay/app/src/main/java/. gtg-build/project/GTGStrength/app/src/main/java/
           if [ -d gtg-build/overlay/app/src/main/res ]; then
             cp -a gtg-build/overlay/app/src/main/res/. gtg-build/project/GTGStrength/app/src/main/res/
