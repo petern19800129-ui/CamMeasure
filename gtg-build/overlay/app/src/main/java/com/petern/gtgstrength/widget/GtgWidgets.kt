@@ -104,9 +104,9 @@ private data class WidgetSnapshot(
     val deadliftSets: Int get() = logsToday.count { it.exercise == Exercise.DEADLIFT.storedName }
     val rdlSets: Int get() = logsToday.count { it.exercise == Exercise.RDL.storedName }
     val deadliftCooldownRemainingMillis: Long
-        get() = (settings.deadliftNextLogAllowedAtMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+        get() = (settings.nextLogAllowedAtMillis(Exercise.DEADLIFT) - System.currentTimeMillis()).coerceAtLeast(0L)
     val rdlCooldownRemainingMillis: Long
-        get() = (settings.rdlNextLogAllowedAtMillis - System.currentTimeMillis()).coerceAtLeast(0L)
+        get() = (settings.nextLogAllowedAtMillis(Exercise.RDL) - System.currentTimeMillis()).coerceAtLeast(0L)
 }
 
 private object GtgWidgetController {
@@ -141,21 +141,19 @@ private object GtgWidgetController {
                 timestamp = sourceTimestamp
             )
         } catch (error: Exception) {
-            app.settingsRepository.clearLogCooldownIfSource(exercise, sourceTimestamp)
+            val previousLog = app.trainingRepository.logs.first()
+                .filter { it.exercise == exercise.storedName && it.timestamp < sourceTimestamp }
+                .maxOfOrNull { it.timestamp } ?: 0L
+            app.settingsRepository.clearLogCooldownIfSource(
+                exercise, sourceTimestamp, previousLog
+            )
             throw error
         }
 
         // Tactile confirmation only after the set and cooldown are saved.
         performStrongLogHaptic(context, background = true)
-        val cooldownMinutes = when (exercise) {
-            Exercise.DEADLIFT -> snapshot.settings.deadliftCooldownMinutes
-            Exercise.RDL -> snapshot.settings.rdlCooldownMinutes
-        }
-        scheduleCooldownRefresh(
-            context = context,
-            nextAllowedAtMillis = sourceTimestamp + cooldownMinutes * 60_000L,
-            exercise = exercise
-        )
+        // Caller refreshes both widgets and schedules the two effective timers,
+        // including the gap that starts for the opposite exercise.
     }
 
     suspend fun refreshAll(context: Context) {
@@ -164,14 +162,14 @@ private object GtgWidgetController {
         if (snapshot.deadliftCooldownRemainingMillis > 0L) {
             scheduleCooldownRefresh(
                 context,
-                snapshot.settings.deadliftNextLogAllowedAtMillis,
+                snapshot.settings.nextLogAllowedAtMillis(Exercise.DEADLIFT),
                 Exercise.DEADLIFT
             )
         }
         if (snapshot.rdlCooldownRemainingMillis > 0L) {
             scheduleCooldownRefresh(
                 context,
-                snapshot.settings.rdlNextLogAllowedAtMillis,
+                snapshot.settings.nextLogAllowedAtMillis(Exercise.RDL),
                 Exercise.RDL
             )
         }
