@@ -51,9 +51,8 @@ jobs:
           sed -i 's/compileSdk = 37/compileSdk = 36/' gtg-build/project/GTGStrength/app/build.gradle.kts
           sed -i 's/compose-bom:2026.08.00/compose-bom:2026.06.00/g' gtg-build/project/GTGStrength/app/build.gradle.kts
 
-          # Overlay GTG v29 with looping, manually dismissible workout alarms.
-          # Include Android precise-alarm permission and stop controls.
-          # Fix Android permission intent for precise-alarm settings.
+          # Overlay GTG v30 with looping alarms that can appear over the lock screen.
+          # Includes precise-alarm, notification and full-screen-intent permissions.
           cp -a gtg-build/overlay/app/src/main/java/. gtg-build/project/GTGStrength/app/src/main/java/
           if [ -d gtg-build/overlay/app/src/main/res ]; then
             cp -a gtg-build/overlay/app/src/main/res/. gtg-build/project/GTGStrength/app/src/main/res/
@@ -92,6 +91,7 @@ jobs:
               'android.permission.FOREGROUND_SERVICE',
               'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
               'android.permission.SCHEDULE_EXACT_ALARM',
+              'android.permission.USE_FULL_SCREEN_INTENT',
           ]:
               if not any(
                   item.get(f'{{{android_ns}}}name') == permission_name
@@ -137,6 +137,8 @@ jobs:
           stop_activity.set(f'{{{android_ns}}}name', '.alarms.CooldownAlarmActivity')
           stop_activity.set(f'{{{android_ns}}}exported', 'false')
           stop_activity.set(f'{{{android_ns}}}screenOrientation', 'portrait')
+          stop_activity.set(f'{{{android_ns}}}showWhenLocked', 'true')
+          stop_activity.set(f'{{{android_ns}}}turnScreenOn', 'true')
 
           tree.write(manifest, encoding='utf-8', xml_declaration=True)
 
@@ -170,7 +172,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GTGStrength-v29-apk
+          name: GTGStrength-v30-apk
           path: gtg-build/project/GTGStrength/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
