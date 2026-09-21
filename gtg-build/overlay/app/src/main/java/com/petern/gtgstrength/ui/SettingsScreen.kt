@@ -65,7 +65,9 @@ fun SettingsScreen(
     onCooldownAlarmEnabledChange: (Boolean) -> Unit,
     onTestCooldownAlarm: () -> Unit,
     exactAlarmAccessGranted: Boolean,
-    onRequestExactAlarmAccess: () -> Unit
+    onRequestExactAlarmAccess: () -> Unit,
+    fullScreenAlarmAccessGranted: Boolean,
+    onRequestFullScreenAlarmAccess: () -> Unit
 ) {
     var editingDay by remember { mutableStateOf<DayPlan?>(null) }
     var editingEquipment by remember { mutableStateOf(false) }
@@ -132,6 +134,17 @@ fun SettingsScreen(
                             onClick = onRequestExactAlarmAccess,
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("ALLOW PRECISE ALARMS") }
+                    }
+                    if (!fullScreenAlarmAccessGranted) {
+                        Text(
+                            "Allow full-screen alarm access so the STOP ALARM screen can appear over the lock screen.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        OutlinedButton(
+                            onClick = onRequestFullScreenAlarmAccess,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("ALLOW LOCK-SCREEN ALARM") }
                     }
                     OutlinedButton(onClick = onTestCooldownAlarm, modifier = Modifier.fillMaxWidth()) {
                         Text("TEST ALARM")
