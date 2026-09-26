@@ -228,6 +228,17 @@ fun GtgApp(viewModel: GtgViewModel) {
             AppScreen.LOG -> TrainingLogScreen(
                 uiState = uiState,
                 modifier = Modifier.padding(innerPadding),
+                onAddLog = { exercise, reps, weight, timestamp ->
+                    viewModel.addManualLog(
+                        exercise = exercise,
+                        reps = reps,
+                        weightKg = weight,
+                        timestamp = timestamp
+                    ) {
+                        requestWidgetRefresh(context)
+                        Toast.makeText(context, "Manual log entry added", Toast.LENGTH_SHORT).show()
+                    }
+                },
                 onUpdateLog = viewModel::updateLog,
                 onDeleteLog = { log ->
                     viewModel.deleteLog(log) { requestWidgetRefresh(context) }
