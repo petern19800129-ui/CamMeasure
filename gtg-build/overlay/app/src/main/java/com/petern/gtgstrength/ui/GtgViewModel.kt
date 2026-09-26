@@ -343,6 +343,27 @@ class GtgViewModel(
         }
     }
 
+    fun addManualLog(
+        exercise: Exercise,
+        reps: Int,
+        weightKg: Double,
+        timestamp: Long,
+        onAdded: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            if (timestamp <= 0L || timestamp > now + 60_000L) return@launch
+            trainingRepository.logSet(
+                exercise = exercise,
+                reps = reps.coerceIn(1, 100),
+                weightKg = weightKg.coerceIn(0.0, 2000.0),
+                timestamp = timestamp
+            )
+            manualRefresh.value += 1
+            onAdded()
+        }
+    }
+
     fun updateLog(log: TrainingLogEntity, reps: Int, weightKg: Double) {
         viewModelScope.launch {
             trainingRepository.update(
