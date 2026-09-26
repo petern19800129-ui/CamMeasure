@@ -45,10 +45,14 @@ jobs:
           cp weighttrend_build/v03/DataRepository.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/DataRepository.java
           cp weighttrend_build/v05/WeightChartView.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
           cp weighttrend_build/v08/TrendCalculator.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java
-          cp weighttrend_build/v08/MainActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java\n          cp weighttrend_build/v08/WeeklyHistoryActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java\n          cp weighttrend_build/v08/AndroidManifest.xml weighttrend_src/app/src/main/AndroidManifest.xml
+          cp weighttrend_build/v08/MainActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java
+          cp weighttrend_build/v08/WeeklyHistoryActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java
+          cp weighttrend_build/v08/AndroidManifest.xml weighttrend_src/app/src/main/AndroidManifest.xml
           cp weighttrend_build/v08/app-build.gradle weighttrend_src/app/build.gradle
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java
-          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java\n          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java\n          test -s weighttrend_src/app/src/main/AndroidManifest.xml
+          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java
+          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java
+          test -s weighttrend_src/app/src/main/AndroidManifest.xml
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
           test -s weighttrend_src/app/build.gradle
 
