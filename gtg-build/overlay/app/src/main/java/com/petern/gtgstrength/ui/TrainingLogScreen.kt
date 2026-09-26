@@ -1,5 +1,7 @@
 package com.petern.gtgstrength.ui
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,11 +16,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -37,6 +42,7 @@ import com.petern.gtgstrength.domain.Exercise
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -48,10 +54,12 @@ import java.util.Locale
 fun TrainingLogScreen(
     uiState: GtgUiState,
     modifier: Modifier = Modifier,
+    onAddLog: (Exercise, Int, Double, Long) -> Unit,
     onUpdateLog: (TrainingLogEntity, Int, Double) -> Unit,
     onDeleteLog: (TrainingLogEntity) -> Unit
 ) {
     var editingLog by remember { mutableStateOf<TrainingLogEntity?>(null) }
+    var addingLog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -93,6 +101,18 @@ fun TrainingLogScreen(
 
                 WeeklyProgressSection(uiState)
 
+                Button(
+                    onClick = { addingLog = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("+ Add manual log entry")
+                }
+                Text(
+                    "Manual entries count toward progress, history and progression qualification, but do not start workout timers.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
                 Text(
                     "History",
                     style = MaterialTheme.typography.titleLarge,
@@ -118,6 +138,18 @@ fun TrainingLogScreen(
         item { Text("", modifier = Modifier.padding(bottom = 8.dp)) }
     }
 
+    if (addingLog) {
+        ManualLogDialog(
+            defaultDeadlift = uiState.todayPlan.deadlift,
+            defaultRdl = uiState.todayPlan.rdl,
+            onDismiss = { addingLog = false },
+            onSave = { exercise, reps, weight, timestamp ->
+                onAddLog(exercise, reps, weight, timestamp)
+                addingLog = false
+            }
+        )
+    }
+
     editingLog?.let { log ->
         EditLogDialog(
             log = log,
@@ -128,6 +160,164 @@ fun TrainingLogScreen(
             }
         )
     }
+}
+
+@Composable
+private fun ManualLogDialog(
+    defaultDeadlift: PlannedExercise,
+    defaultRdl: PlannedExercise,
+    onDismiss: () -> Unit,
+    onSave: (Exercise, Int, Double, Long) -> Unit
+) {
+    val context = LocalContext.current
+    var exercise by remember { mutableStateOf(Exercise.DEADLIFT) }
+    var repsText by remember {
+        mutableStateOf(defaultDeadlift.reps.coerceAtLeast(1).toString())
+    }
+    var weightText by remember {
+        mutableStateOf(formatKg(defaultDeadlift.minWeightKg.coerceAtLeast(0.0)))
+    }
+    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var selectedTime by remember {
+        val now = LocalTime.now()
+        mutableStateOf(LocalTime.of(now.hour, now.minute))
+    }
+
+    fun selectExercise(value: Exercise) {
+        exercise = value
+        val plan = if (value == Exercise.DEADLIFT) defaultDeadlift else defaultRdl
+        repsText = plan.reps.coerceAtLeast(1).toString()
+        weightText = formatKg(plan.minWeightKg.coerceAtLeast(0.0))
+    }
+
+    val reps = repsText.toIntOrNull()
+    val weight = weightText.replace(',', '.').toDoubleOrNull()
+    val timestamp = selectedDate
+        .atTime(selectedTime)
+        .atZone(ZoneId.systemDefault())
+        .toInstant()
+        .toEpochMilli()
+    val isFuture = timestamp > System.currentTimeMillis() + 60_000L
+    val canSave = reps != null && reps in 1..100 &&
+        weight != null && weight in 0.0..2000.0 && !isFuture
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add manual log entry") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Exercise", fontWeight = FontWeight.SemiBold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (exercise == Exercise.DEADLIFT) {
+                        Button(
+                            onClick = { selectExercise(Exercise.DEADLIFT) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Deadlift") }
+                    } else {
+                        OutlinedButton(
+                            onClick = { selectExercise(Exercise.DEADLIFT) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Deadlift") }
+                    }
+                    if (exercise == Exercise.RDL) {
+                        Button(
+                            onClick = { selectExercise(Exercise.RDL) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("RDL") }
+                    } else {
+                        OutlinedButton(
+                            onClick = { selectExercise(Exercise.RDL) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("RDL") }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = repsText,
+                    onValueChange = { repsText = it.filter(Char::isDigit).take(3) },
+                    label = { Text("Reps") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = weightText,
+                    onValueChange = { weightText = it.take(7) },
+                    label = { Text("Weight") },
+                    suffix = { Text("kg") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            DatePickerDialog(
+                                context,
+                                { _, year, month, day ->
+                                    selectedDate = LocalDate.of(year, month + 1, day)
+                                },
+                                selectedDate.year,
+                                selectedDate.monthValue - 1,
+                                selectedDate.dayOfMonth
+                            ).show()
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(selectedDate.format(DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.getDefault())))
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            TimePickerDialog(
+                                context,
+                                { _, hour, minute ->
+                                    selectedTime = LocalTime.of(hour, minute)
+                                },
+                                selectedTime.hour,
+                                selectedTime.minute,
+                                true
+                            ).show()
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(selectedTime.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault())))
+                    }
+                }
+
+                if (isFuture) {
+                    Text(
+                        "Date and time cannot be in the future.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    Text(
+                        "This entry is added directly to the Training Log and will not start a lockout timer.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = canSave,
+                onClick = { onSave(exercise, reps!!, weight!!, timestamp) }
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable
