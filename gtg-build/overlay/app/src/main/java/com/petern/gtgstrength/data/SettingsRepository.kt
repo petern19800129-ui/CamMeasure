@@ -44,9 +44,17 @@ data class TrainingSettings(
     val deadliftNextLogAllowedAtMillis: Long = 0L,
     val rdlNextLogAllowedAtMillis: Long = 0L,
     val deadliftCooldownSourceLogTimestamp: Long = 0L,
-    val rdlCooldownSourceLogTimestamp: Long = 0L
+    val rdlCooldownSourceLogTimestamp: Long = 0L,
+    val deadliftTimerBypassed: Boolean = false,
+    val rdlTimerBypassed: Boolean = false
 ) {
     fun nextLogAllowedAtMillis(exercise: Exercise): Long {
+        val bypassed = when (exercise) {
+            Exercise.DEADLIFT -> deadliftTimerBypassed
+            Exercise.RDL -> rdlTimerBypassed
+        }
+        if (bypassed) return 0L
+
         val ownUntil = when (exercise) {
             Exercise.DEADLIFT -> deadliftNextLogAllowedAtMillis
             Exercise.RDL -> rdlNextLogAllowedAtMillis
@@ -93,6 +101,8 @@ class SettingsRepository(
         val rdlNextLogAllowedAtMillis = longPreferencesKey("rdl_next_log_allowed_at_millis")
         val deadliftCooldownSourceLogTimestamp = longPreferencesKey("deadlift_cooldown_source_log_timestamp")
         val rdlCooldownSourceLogTimestamp = longPreferencesKey("rdl_cooldown_source_log_timestamp")
+        val deadliftTimerBypassed = booleanPreferencesKey("deadlift_timer_bypassed")
+        val rdlTimerBypassed = booleanPreferencesKey("rdl_timer_bypassed")
     }
 
     val settings: Flow<TrainingSettings> = context.trainingSettingsDataStore.data
@@ -170,6 +180,18 @@ class SettingsRepository(
         }
     }
 
+    suspend fun temporarilyBypassCooldown(exercise: Exercise) {
+        context.trainingSettingsDataStore.edit { preferences ->
+            preferences[bypassKey(exercise)] = true
+        }
+    }
+
+    suspend fun restoreTimerBypass(exercise: Exercise) {
+        context.trainingSettingsDataStore.edit { preferences ->
+            preferences[bypassKey(exercise)] = true
+        }
+    }
+
     suspend fun setCrossExerciseCooldownMinutes(
         minutes: Int,
         lastDeadliftLogAtMillis: Long = 0L,
@@ -230,8 +252,16 @@ class SettingsRepository(
             val crossUntil = if (lastOther > 0L && gapMinutes > 0) {
                 lastOther + gapMinutes * 60_000L
             } else 0L
-            val currentUntil = maxOf(preferences[nextKey] ?: 0L, crossUntil)
+            val bypassKey = bypassKey(exercise)
+            val bypassed = preferences[bypassKey] ?: false
+            val currentUntil = if (bypassed) {
+                0L
+            } else {
+                maxOf(preferences[nextKey] ?: 0L, crossUntil)
+            }
             if (currentUntil <= nowMillis) {
+                // A manual Skip is consumed by this successful reservation.
+                preferences[bypassKey] = false
                 val durationMinutes =
                     (preferences[cooldownMinutesKey(exercise)] ?: 60).coerceIn(0, 240)
 
@@ -337,6 +367,11 @@ class SettingsRepository(
         }
     }
 
+    private fun bypassKey(exercise: Exercise) = when (exercise) {
+        Exercise.DEADLIFT -> Keys.deadliftTimerBypassed
+        Exercise.RDL -> Keys.rdlTimerBypassed
+    }
+
     private fun cooldownMinutesKey(exercise: Exercise) = when (exercise) {
         Exercise.DEADLIFT -> Keys.deadliftCooldownMinutes
         Exercise.RDL -> Keys.rdlCooldownMinutes
@@ -379,7 +414,9 @@ class SettingsRepository(
             deadliftNextLogAllowedAtMillis = preferences[Keys.deadliftNextLogAllowedAtMillis] ?: 0L,
             rdlNextLogAllowedAtMillis = preferences[Keys.rdlNextLogAllowedAtMillis] ?: 0L,
             deadliftCooldownSourceLogTimestamp = preferences[Keys.deadliftCooldownSourceLogTimestamp] ?: 0L,
-            rdlCooldownSourceLogTimestamp = preferences[Keys.rdlCooldownSourceLogTimestamp] ?: 0L
+            rdlCooldownSourceLogTimestamp = preferences[Keys.rdlCooldownSourceLogTimestamp] ?: 0L,
+            deadliftTimerBypassed = preferences[Keys.deadliftTimerBypassed] ?: false,
+            rdlTimerBypassed = preferences[Keys.rdlTimerBypassed] ?: false
         )
     }
 }
