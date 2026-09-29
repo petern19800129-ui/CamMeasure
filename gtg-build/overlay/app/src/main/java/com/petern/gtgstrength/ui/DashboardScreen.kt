@@ -14,6 +14,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,7 +36,8 @@ import kotlin.math.roundToInt
 fun DashboardScreen(
     uiState: GtgUiState,
     modifier: Modifier = Modifier,
-    onQuickLog: (Exercise, Double) -> Unit
+    onQuickLog: (Exercise, Double) -> Unit,
+    onSkipCooldown: (Exercise) -> Unit
 ) {
     val deadliftPlan = uiState.todayPlan.deadlift
     val rdlPlan = uiState.todayPlan.rdl
@@ -117,8 +119,16 @@ fun DashboardScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    CooldownStatusRow("Deadlift", uiState.deadliftCooldownRemainingMillis)
-                    CooldownStatusRow("RDL", uiState.rdlCooldownRemainingMillis)
+                    CooldownStatusRow(
+                        label = "Deadlift",
+                        remainingMillis = uiState.deadliftCooldownRemainingMillis,
+                        onSkip = { onSkipCooldown(Exercise.DEADLIFT) }
+                    )
+                    CooldownStatusRow(
+                        label = "RDL",
+                        remainingMillis = uiState.rdlCooldownRemainingMillis,
+                        onSkip = { onSkipCooldown(Exercise.RDL) }
+                    )
                     Text(
                         if (uiState.settings.crossExerciseCooldownMinutes > 0)
                             "Between-exercise gap: ${uiState.settings.crossExerciseCooldownMinutes} min. The longer of the own timer or this gap applies."
@@ -184,18 +194,29 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun CooldownStatusRow(label: String, remainingMillis: Long) {
+private fun CooldownStatusRow(
+    label: String,
+    remainingMillis: Long,
+    onSkip: () -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(
-            if (remainingMillis > 0L) formatCooldown(remainingMillis) else "Ready",
-            color = if (remainingMillis > 0L) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.SemiBold
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                if (remainingMillis > 0L) formatCooldown(remainingMillis) else "Ready",
+                color = if (remainingMillis > 0L) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold
+            )
+            if (remainingMillis > 0L) {
+                TextButton(onClick = onSkip) {
+                    Text("Skip")
+                }
+            }
+        }
     }
 }
 
