@@ -75,6 +75,24 @@ class CrossExerciseCooldownTest {
     }
 
     @Test
+    fun temporaryBypassUnlocksOnlySelectedExercise() {
+        val settings = TrainingSettings(
+            crossExerciseCooldownMinutes = 45,
+            deadliftNextLogAllowedAtMillis = loggedAt + 60 * 60_000L,
+            rdlNextLogAllowedAtMillis = loggedAt + 60 * 60_000L,
+            deadliftCooldownSourceLogTimestamp = loggedAt,
+            rdlCooldownSourceLogTimestamp = loggedAt,
+            deadliftTimerBypassed = true
+        )
+
+        assertEquals(0L, settings.nextLogAllowedAtMillis(Exercise.DEADLIFT))
+        assertEquals(
+            loggedAt + 60 * 60_000L,
+            settings.nextLogAllowedAtMillis(Exercise.RDL)
+        )
+    }
+
+    @Test
     fun disablingCrossGapUnlocksOppositeExercise() {
         val settings = TrainingSettings(
             crossExerciseCooldownMinutes = 0,
