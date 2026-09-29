@@ -32,6 +32,8 @@ import kotlin.math.round
 
 private const val ACTION_QUICK_DL = "com.petern.gtgstrength.widget.QUICK_DL"
 private const val ACTION_QUICK_RDL = "com.petern.gtgstrength.widget.QUICK_RDL"
+private const val ACTION_SKIP_DL = "com.petern.gtgstrength.widget.SKIP_DL"
+private const val ACTION_SKIP_RDL = "com.petern.gtgstrength.widget.SKIP_RDL"
 private const val ACTION_REFRESH = "com.petern.gtgstrength.widget.REFRESH"
 private const val COOLDOWN_REFRESH_DL_REQUEST = 90_001
 private const val COOLDOWN_REFRESH_RDL_REQUEST = 90_002
@@ -62,6 +64,24 @@ class TodayWidgetProvider : AppWidgetProvider() {
                     try {
                         val exercise = if (intent.action == ACTION_QUICK_DL) Exercise.DEADLIFT else Exercise.RDL
                         GtgWidgetController.quickLog(context, exercise)
+                        GtgWidgetController.refreshAll(context)
+                    } finally {
+                        result.finish()
+                    }
+                }
+            }
+
+            ACTION_SKIP_DL, ACTION_SKIP_RDL -> {
+                val result = goAsync()
+                widgetScope().launch {
+                    try {
+                        val exercise = if (intent.action == ACTION_SKIP_DL) {
+                            Exercise.DEADLIFT
+                        } else {
+                            Exercise.RDL
+                        }
+                        val app = context.applicationContext as GtgApplication
+                        app.settingsRepository.temporarilyBypassCooldown(exercise)
                         GtgWidgetController.refreshAll(context)
                     } finally {
                         result.finish()
@@ -122,6 +142,11 @@ private object GtgWidgetController {
         }
         if (planned.sets <= 0 || planned.reps <= 0) return
 
+        val wasBypassed = when (exercise) {
+            Exercise.DEADLIFT -> snapshot.settings.deadliftTimerBypassed
+            Exercise.RDL -> snapshot.settings.rdlTimerBypassed
+        }
+
         val sourceTimestamp = System.currentTimeMillis()
         val acquired = app.settingsRepository.tryStartLogCooldown(
             exercise = exercise,
@@ -148,6 +173,9 @@ private object GtgWidgetController {
             app.settingsRepository.clearLogCooldownIfSource(
                 exercise, sourceTimestamp, previousLog
             )
+            if (wasBypassed) {
+                app.settingsRepository.restoreTimerBypass(exercise)
+            }
             throw error
         }
 
@@ -252,32 +280,35 @@ private object GtgWidgetController {
                 label = "Next RDL"
             )
 
-            views.setBoolean(
-                R.id.widget_log_deadlift,
-                "setEnabled",
-                snapshot.deadliftCooldownRemainingMillis <= 0L
-            )
+            val deadliftLocked = snapshot.deadliftCooldownRemainingMillis > 0L
+            val rdlLocked = snapshot.rdlCooldownRemainingMillis > 0L
+
+            views.setBoolean(R.id.widget_log_deadlift, "setEnabled", true)
             views.setTextViewText(
                 R.id.widget_log_deadlift,
-                if (snapshot.deadliftCooldownRemainingMillis > 0L) "DL locked" else "+1 DL"
+                if (deadliftLocked) "Skip DL" else "+1 DL"
             )
-            views.setBoolean(
-                R.id.widget_log_rdl,
-                "setEnabled",
-                snapshot.rdlCooldownRemainingMillis <= 0L
-            )
-            views.setTextViewText(
-                R.id.widget_log_rdl,
-                if (snapshot.rdlCooldownRemainingMillis > 0L) "RDL locked" else "+1 RDL"
+            views.setOnClickPendingIntent(
+                R.id.widget_log_deadlift,
+                if (deadliftLocked) {
+                    skipCooldownPendingIntent(context, Exercise.DEADLIFT, 20_000 + widgetId)
+                } else {
+                    quickLogPendingIntent(context, Exercise.DEADLIFT, 20_000 + widgetId)
+                }
             )
 
-            views.setOnClickPendingIntent(
-                R.id.widget_log_deadlift,
-                quickLogPendingIntent(context, Exercise.DEADLIFT, 20_000 + widgetId)
+            views.setBoolean(R.id.widget_log_rdl, "setEnabled", true)
+            views.setTextViewText(
+                R.id.widget_log_rdl,
+                if (rdlLocked) "Skip RDL" else "+1 RDL"
             )
             views.setOnClickPendingIntent(
                 R.id.widget_log_rdl,
-                quickLogPendingIntent(context, Exercise.RDL, 30_000 + widgetId)
+                if (rdlLocked) {
+                    skipCooldownPendingIntent(context, Exercise.RDL, 30_000 + widgetId)
+                } else {
+                    quickLogPendingIntent(context, Exercise.RDL, 30_000 + widgetId)
+                }
             )
         }
 
@@ -350,6 +381,21 @@ private fun quickLogPendingIntent(
     return PendingIntent.getBroadcast(
         context,
         requestCode,
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+}
+
+private fun skipCooldownPendingIntent(
+    context: Context,
+    exercise: Exercise,
+    requestCode: Int
+): PendingIntent {
+    val action = if (exercise == Exercise.DEADLIFT) ACTION_SKIP_DL else ACTION_SKIP_RDL
+    val intent = Intent(context, TodayWidgetProvider::class.java).setAction(action)
+    return PendingIntent.getBroadcast(
+        context,
+        requestCode + 50_000,
         intent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
