@@ -222,6 +222,16 @@ fun GtgApp(viewModel: GtgViewModel) {
                             ).show()
                         }
                     )
+                },
+                onSkipCooldown = { exercise ->
+                    viewModel.temporarilyBypassCooldown(exercise) {
+                        requestWidgetRefresh(context)
+                        Toast.makeText(
+                            context,
+                            "${exercise.displayName} timer skipped until the next log.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             )
 
