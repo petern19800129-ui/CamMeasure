@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.petern.gtgstrength.data.BarbellEquipment
 import com.petern.gtgstrength.data.BarbellEquipmentCodec
 import com.petern.gtgstrength.data.DayPlan
+import com.petern.gtgstrength.data.LogTimerPolicy
 import com.petern.gtgstrength.data.ProgressionLog
 import com.petern.gtgstrength.data.ProgressionPolicy
 import com.petern.gtgstrength.data.ProgressionReadiness
@@ -250,6 +251,16 @@ class GtgViewModel(
         }
     }
 
+    fun setSkipCooldownAfterFinalPlannedSet(
+        enabled: Boolean,
+        onChanged: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            settingsRepository.setSkipCooldownAfterFinalPlannedSet(enabled)
+            onChanged()
+        }
+    }
+
     fun setDeadliftCooldownMinutes(value: Int, onChanged: () -> Unit = {}) {
         viewModelScope.launch {
             settingsRepository.setCooldownMinutes(Exercise.DEADLIFT, value)
@@ -294,11 +305,35 @@ class GtgViewModel(
 
         val safeWeight = weightKg.coerceIn(0.0, 2000.0)
         viewModelScope.launch {
+            val state = uiState.value
+            val completedBefore = when (exercise) {
+                Exercise.DEADLIFT -> state.deadliftSetsToday
+                Exercise.RDL -> state.rdlSetsToday
+            }
+            val otherCompletedBefore = when (exercise) {
+                Exercise.DEADLIFT -> state.rdlSetsToday
+                Exercise.RDL -> state.deadliftSetsToday
+            }
+            val otherPlannedSets = when (exercise) {
+                Exercise.DEADLIFT -> state.todayPlan.rdl.sets
+                Exercise.RDL -> state.todayPlan.deadlift.sets
+            }
+            val timerDecision = LogTimerPolicy.afterNextPlannedSet(
+                skipAfterFinalPlannedSet = state.settings.skipCooldownAfterFinalPlannedSet,
+                completedSetsBefore = completedBefore,
+                plannedSets = plan.sets,
+                otherCompletedSetsBefore = otherCompletedBefore,
+                otherPlannedSets = otherPlannedSets
+            )
+
             val sourceTimestamp = System.currentTimeMillis()
             val acquired = settingsRepository.tryStartLogCooldown(
                 exercise = exercise,
                 sourceLogTimestamp = sourceTimestamp,
-                nowMillis = sourceTimestamp
+                nowMillis = sourceTimestamp,
+                skipOwnCooldownAfterLog = timerDecision.skipOwnCooldownAfterLog,
+                startCrossExerciseGapAfterLog =
+                    timerDecision.startCrossExerciseGapAfterLog
             )
 
             if (!acquired) {
@@ -394,7 +429,7 @@ class GtgViewModel(
         val settings = state.settings
         val root = JSONObject()
             .put("app", "GTG Strength")
-            .put("version", 9)
+            .put("version", 10)
             .put("exportedAt", System.currentTimeMillis())
             .put(
                 "settings",
@@ -411,6 +446,10 @@ class GtgViewModel(
                     .put("rdlCooldownMinutes", settings.rdlCooldownMinutes)
                     .put("crossExerciseCooldownMinutes", settings.crossExerciseCooldownMinutes)
                     .put("cooldownAlarmEnabled", settings.cooldownAlarmEnabled)
+                    .put(
+                        "skipCooldownAfterFinalPlannedSet",
+                        settings.skipCooldownAfterFinalPlannedSet
+                    )
                     .put("deadliftLastProgressionAtMillis", settings.deadliftLastProgressionAtMillis)
                     .put("rdlLastProgressionAtMillis", settings.rdlLastProgressionAtMillis)
             )
@@ -436,7 +475,7 @@ class GtgViewModel(
             try {
                 val root = JSONObject(json)
                 val version = root.optInt("version", -1)
-                require(version in 1..9) { "Unsupported backup version" }
+                require(version in 1..10) { "Unsupported backup version" }
                 val saved = root.getJSONObject("settings")
                 val current = uiState.value.settings
 
@@ -482,6 +521,11 @@ class GtgViewModel(
                             saved.optBoolean("cooldownAlarmEnabled", false)
                         } else {
                             current.cooldownAlarmEnabled
+                        },
+                        skipCooldownAfterFinalPlannedSet = if (version >= 10) {
+                            saved.optBoolean("skipCooldownAfterFinalPlannedSet", false)
+                        } else {
+                            current.skipCooldownAfterFinalPlannedSet
                         },
                         deadliftLastProgressionAtMillis = if (version >= 7) {
                             saved.optLong("deadliftLastProgressionAtMillis", 0L).coerceAtLeast(0L)
