@@ -261,6 +261,16 @@ class GtgViewModel(
         }
     }
 
+    fun temporarilyBypassCooldown(
+        exercise: Exercise,
+        onChanged: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            settingsRepository.temporarilyBypassCooldown(exercise)
+            onChanged()
+        }
+    }
+
     fun setDeadliftCooldownMinutes(value: Int, onChanged: () -> Unit = {}) {
         viewModelScope.launch {
             settingsRepository.setCooldownMinutes(Exercise.DEADLIFT, value)
@@ -326,6 +336,11 @@ class GtgViewModel(
                 otherPlannedSets = otherPlannedSets
             )
 
+            val wasBypassed = when (exercise) {
+                Exercise.DEADLIFT -> state.settings.deadliftTimerBypassed
+                Exercise.RDL -> state.settings.rdlTimerBypassed
+            }
+
             val sourceTimestamp = System.currentTimeMillis()
             val acquired = settingsRepository.tryStartLogCooldown(
                 exercise = exercise,
@@ -356,6 +371,9 @@ class GtgViewModel(
                 settingsRepository.clearLogCooldownIfSource(
                     exercise, sourceTimestamp, previousLog
                 )
+                if (wasBypassed) {
+                    settingsRepository.restoreTimerBypass(exercise)
+                }
                 throw error
             }
         }
