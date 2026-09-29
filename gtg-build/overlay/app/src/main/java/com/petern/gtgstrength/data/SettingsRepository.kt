@@ -37,6 +37,7 @@ data class TrainingSettings(
     val rdlCooldownMinutes: Int = 60,
     val crossExerciseCooldownMinutes: Int = 0,
     val cooldownAlarmEnabled: Boolean = false,
+    val skipCooldownAfterFinalPlannedSet: Boolean = false,
     val deadliftLastProgressionAtMillis: Long = 0L,
     val rdlLastProgressionAtMillis: Long = 0L,
     // Transient training state. Intentionally not included in backup export.
@@ -83,6 +84,8 @@ class SettingsRepository(
         val rdlCooldownMinutes = intPreferencesKey("rdl_cooldown_minutes")
         val crossExerciseCooldownMinutes = intPreferencesKey("cross_exercise_cooldown_minutes")
         val cooldownAlarmEnabled = booleanPreferencesKey("cooldown_alarm_enabled")
+        val skipCooldownAfterFinalPlannedSet =
+            booleanPreferencesKey("skip_cooldown_after_final_planned_set")
         val deadliftLastProgressionAtMillis = longPreferencesKey("deadlift_last_progression_at_millis")
         val rdlLastProgressionAtMillis = longPreferencesKey("rdl_last_progression_at_millis")
 
@@ -161,6 +164,12 @@ class SettingsRepository(
         }
     }
 
+    suspend fun setSkipCooldownAfterFinalPlannedSet(enabled: Boolean) {
+        context.trainingSettingsDataStore.edit { preferences ->
+            preferences[Keys.skipCooldownAfterFinalPlannedSet] = enabled
+        }
+    }
+
     suspend fun setCrossExerciseCooldownMinutes(
         minutes: Int,
         lastDeadliftLogAtMillis: Long = 0L,
@@ -205,7 +214,9 @@ class SettingsRepository(
     suspend fun tryStartLogCooldown(
         exercise: Exercise,
         sourceLogTimestamp: Long,
-        nowMillis: Long = System.currentTimeMillis()
+        nowMillis: Long = System.currentTimeMillis(),
+        skipOwnCooldownAfterLog: Boolean = false,
+        startCrossExerciseGapAfterLog: Boolean = true
     ): Boolean {
         var acquired = false
         context.trainingSettingsDataStore.edit { preferences ->
@@ -221,11 +232,21 @@ class SettingsRepository(
             } else 0L
             val currentUntil = maxOf(preferences[nextKey] ?: 0L, crossUntil)
             if (currentUntil <= nowMillis) {
-                val durationMinutes = (preferences[cooldownMinutesKey(exercise)] ?: 60).coerceIn(0, 240)
-                preferences[nextKey] = if (durationMinutes == 0) 0L
-                    else nowMillis + durationMinutes * 60_000L
-                // Also keep last successful log timestamp when own timer is disabled.
-                preferences[sourceKey] = sourceLogTimestamp
+                val durationMinutes =
+                    (preferences[cooldownMinutesKey(exercise)] ?: 60).coerceIn(0, 240)
+
+                preferences[nextKey] =
+                    if (skipOwnCooldownAfterLog || durationMinutes == 0) {
+                        0L
+                    } else {
+                        nowMillis + durationMinutes * 60_000L
+                    }
+
+                val rememberSource =
+                    (!skipOwnCooldownAfterLog && durationMinutes > 0) ||
+                        (startCrossExerciseGapAfterLog && gapMinutes > 0)
+
+                preferences[sourceKey] = if (rememberSource) sourceLogTimestamp else 0L
                 acquired = true
             }
         }
@@ -282,6 +303,8 @@ class SettingsRepository(
             preferences[Keys.crossExerciseCooldownMinutes] =
                 value.crossExerciseCooldownMinutes.coerceIn(0, 240)
             preferences[Keys.cooldownAlarmEnabled] = value.cooldownAlarmEnabled
+            preferences[Keys.skipCooldownAfterFinalPlannedSet] =
+                value.skipCooldownAfterFinalPlannedSet
             preferences[Keys.deadliftLastProgressionAtMillis] =
                 value.deadliftLastProgressionAtMillis.coerceAtLeast(0L)
             preferences[Keys.rdlLastProgressionAtMillis] =
@@ -347,6 +370,8 @@ class SettingsRepository(
             rdlCooldownMinutes = preferences[Keys.rdlCooldownMinutes] ?: 60,
             crossExerciseCooldownMinutes = preferences[Keys.crossExerciseCooldownMinutes] ?: 0,
             cooldownAlarmEnabled = preferences[Keys.cooldownAlarmEnabled] ?: false,
+            skipCooldownAfterFinalPlannedSet =
+                preferences[Keys.skipCooldownAfterFinalPlannedSet] ?: false,
             deadliftLastProgressionAtMillis =
                 preferences[Keys.deadliftLastProgressionAtMillis] ?: 0L,
             rdlLastProgressionAtMillis =
