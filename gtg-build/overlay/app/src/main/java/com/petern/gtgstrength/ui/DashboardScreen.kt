@@ -129,13 +129,6 @@ fun DashboardScreen(
                         remainingMillis = uiState.rdlCooldownRemainingMillis,
                         onSkip = { onSkipCooldown(Exercise.RDL) }
                     )
-                    Text(
-                        if (uiState.settings.crossExerciseCooldownMinutes > 0)
-                            "Between-exercise gap: ${uiState.settings.crossExerciseCooldownMinutes} min. The longer of the own timer or this gap applies."
-                        else "Each exercise has its own timer; the between-exercise gap is off.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
         }
