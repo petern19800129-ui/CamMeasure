@@ -5,7 +5,7 @@ on:
     branches:
       - weighttrend-build-20260913
     paths:
-      - 'weighttrend_build/v12/**'
+      - 'weighttrend_build/v13/**'
       - '.github/workflows/weighttrend-build.yml'
   workflow_dispatch:
 
@@ -35,7 +35,7 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Reconstruct proven source and apply v0.12 aligned recent measurements
+      - name: Reconstruct proven source and apply v0.13 week details
         shell: bash
         run: |
           cat weighttrend_build/source.part1 weighttrend_build/source.part2 weighttrend_build/source.part3 weighttrend_build/source.part4 | base64 --decode > /tmp/weighttrend-base.zip
@@ -46,12 +46,12 @@ jobs:
           cp weighttrend_build/v05/WeightChartView.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
           cp weighttrend_build/v08/TrendCalculator.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java
           cp weighttrend_build/v12/MainActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java
-          cp weighttrend_build/v10/WeeklyHistoryActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java
-          cp weighttrend_build/v08/AndroidManifest.xml weighttrend_src/app/src/main/AndroidManifest.xml
-          cp weighttrend_build/v12/app-build.gradle weighttrend_src/app/build.gradle
+          cp weighttrend_build/v13/WeeklyHistoryActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java\n          cp weighttrend_build/v13/WeekDetailActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeekDetailActivity.java
+          cp weighttrend_build/v13/AndroidManifest.xml weighttrend_src/app/src/main/AndroidManifest.xml
+          cp weighttrend_build/v13/app-build.gradle weighttrend_src/app/build.gradle
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java
-          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java
+          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java\n          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeekDetailActivity.java
           test -s weighttrend_src/app/src/main/AndroidManifest.xml
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
           test -s weighttrend_src/app/build.gradle
@@ -63,7 +63,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: WeightTrend-v0.12-debug-apk
+          name: WeightTrend-v0.13-debug-apk
           path: weighttrend_src/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
