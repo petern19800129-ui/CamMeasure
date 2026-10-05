@@ -1,0 +1,23 @@
+<resources>
+    <color name="brand_blue">#8AB4F8</color>
+    <color name="brand_blue_dark">#6F9EE8</color>
+    <color name="white">#FFFFFF</color>
+    <color name="app_background">#121212</color>
+
+    <color name="chart_grid">#3C4043</color>
+    <color name="chart_text">#C4C7C5</color>
+    <color name="chart_actual">#AAB4BE</color>
+    <color name="chart_trend">#8AB4F8</color>
+    <color name="chart_forecast">#FFB36B</color>
+
+    <color name="healthy_fill">#334FCB87</color>
+    <color name="healthy_border">#AA69D99A</color>
+    <color name="healthy_label">#7CE0A2</color>
+
+    <color name="change_up">#FF7070</color>
+    <color name="change_down">#70DC92</color>
+    <color name="change_flat">#FFD54F</color>
+    <color name="status_blue">#8AB4F8</color>
+    <color name="muted">#A7AAAD</color>
+    <color name="divider">#33FFFFFF</color>
+</resources>
