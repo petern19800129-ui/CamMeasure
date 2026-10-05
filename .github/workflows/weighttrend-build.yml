@@ -47,13 +47,22 @@ jobs:
           cp weighttrend_build/v08/TrendCalculator.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java
           cp weighttrend_build/v14/MainActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java
           cp weighttrend_build/v14/WeeklyHistoryActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java
-          cp weighttrend_build/v14/WeekDetailActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeekDetailActivity.java\n          cp weighttrend_build/v14/ThemeHelper.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/ThemeHelper.java
+          cp weighttrend_build/v14/WeekDetailActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeekDetailActivity.java
+          cp weighttrend_build/v14/ThemeHelper.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/ThemeHelper.java
           cp weighttrend_build/v13/AndroidManifest.xml weighttrend_src/app/src/main/AndroidManifest.xml
-          mkdir -p weighttrend_src/app/src/main/res/values-night\n          cp weighttrend_build/v14/styles.xml weighttrend_src/app/src/main/res/values/styles.xml\n          cp weighttrend_build/v14/colors.xml weighttrend_src/app/src/main/res/values/colors.xml\n          cp weighttrend_build/v14/styles-night.xml weighttrend_src/app/src/main/res/values-night/styles.xml\n          cp weighttrend_build/v14/colors-night.xml weighttrend_src/app/src/main/res/values-night/colors.xml\n          cp weighttrend_build/v14/app-build.gradle weighttrend_src/app/build.gradle
+          mkdir -p weighttrend_src/app/src/main/res/values-night
+          cp weighttrend_build/v14/styles.xml weighttrend_src/app/src/main/res/values/styles.xml
+          cp weighttrend_build/v14/colors.xml weighttrend_src/app/src/main/res/values/colors.xml
+          cp weighttrend_build/v14/styles-night.xml weighttrend_src/app/src/main/res/values-night/styles.xml
+          cp weighttrend_build/v14/colors-night.xml weighttrend_src/app/src/main/res/values-night/colors.xml
+          cp weighttrend_build/v14/app-build.gradle weighttrend_src/app/build.gradle
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java
-          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeekDetailActivity.java\n          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/ThemeHelper.java\n          test -s weighttrend_src/app/src/main/res/values/styles.xml\n          test -s weighttrend_src/app/src/main/res/values-night/styles.xml
+          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeekDetailActivity.java
+          test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/ThemeHelper.java
+          test -s weighttrend_src/app/src/main/res/values/styles.xml
+          test -s weighttrend_src/app/src/main/res/values-night/styles.xml
           test -s weighttrend_src/app/src/main/AndroidManifest.xml
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
           test -s weighttrend_src/app/build.gradle
