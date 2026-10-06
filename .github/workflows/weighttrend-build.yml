@@ -5,7 +5,7 @@ on:
     branches:
       - weighttrend-build-20260913
     paths:
-      - 'weighttrend_build/v14/**'
+      - 'weighttrend_build/v15/**'
       - '.github/workflows/weighttrend-build.yml'
   workflow_dispatch:
 
@@ -35,7 +35,7 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Reconstruct proven source and apply v0.14 light and dark themes
+      - name: Reconstruct proven source and apply v0.15 selectable trend methods
         shell: bash
         run: |
           cat weighttrend_build/source.part1 weighttrend_build/source.part2 weighttrend_build/source.part3 weighttrend_build/source.part4 | base64 --decode > /tmp/weighttrend-base.zip
@@ -43,9 +43,9 @@ jobs:
           mkdir -p weighttrend_src
           unzip -q /tmp/weighttrend-base.zip -d weighttrend_src
           cp weighttrend_build/v03/DataRepository.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/DataRepository.java
-          cp weighttrend_build/v14/WeightChartView.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
-          cp weighttrend_build/v08/TrendCalculator.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java
-          cp weighttrend_build/v14/MainActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java
+          cp weighttrend_build/v15/WeightChartView.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeightChartView.java
+          cp weighttrend_build/v15/TrendCalculator.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java
+          cp weighttrend_build/v15/MainActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java
           cp weighttrend_build/v14/WeeklyHistoryActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java
           cp weighttrend_build/v14/WeekDetailActivity.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeekDetailActivity.java
           cp weighttrend_build/v14/ThemeHelper.java weighttrend_src/app/src/main/java/za/co/petern/weighttrend/ThemeHelper.java
@@ -55,7 +55,7 @@ jobs:
           cp weighttrend_build/v14/colors.xml weighttrend_src/app/src/main/res/values/colors.xml
           cp weighttrend_build/v14/styles-night.xml weighttrend_src/app/src/main/res/values-night/styles.xml
           cp weighttrend_build/v14/colors-night.xml weighttrend_src/app/src/main/res/values-night/colors.xml
-          cp weighttrend_build/v14/app-build.gradle weighttrend_src/app/build.gradle
+          cp weighttrend_build/v15/app-build.gradle weighttrend_src/app/build.gradle
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/MainActivity.java
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/TrendCalculator.java
           test -s weighttrend_src/app/src/main/java/za/co/petern/weighttrend/WeeklyHistoryActivity.java
@@ -74,7 +74,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: WeightTrend-v0.14-debug-apk
+          name: WeightTrend-v0.15-debug-apk
           path: weighttrend_src/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
