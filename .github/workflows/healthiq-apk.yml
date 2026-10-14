@@ -21,12 +21,12 @@ jobs:
           SDKMGR="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n1)"
           test -n "$SDKMGR"
           yes | "$SDKMGR" --licenses >/dev/null || true
-          "$SDKMGR" --install 'platforms;android-35' 'build-tools;35.0.0'
+          "$SDKMGR" --install 'platforms;android-36' 'build-tools;35.0.0'
       - name: Extract HealthIQ project
         run: unzip -q healthiq/source.zip -d /tmp/healthiq
       - name: Compile Android debug APK
         working-directory: /tmp/healthiq/HealthIQ-Android
-        run: gradle --no-daemon assembleDebug --stacktrace
+        run: gradle --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
         if: success()
         with:
