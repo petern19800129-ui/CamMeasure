@@ -153,11 +153,10 @@ public class PresetTimerWidgetProvider extends AppWidgetProvider {
 
         views.setTextViewText(
                 R.id.widget_label,
-                "Timer " + (timerIndex + 1) + "  •  P" + (presetIndex + 1));
+                "T" + (timerIndex + 1) + "  P" + (presetIndex + 1));
 
         PendingIntent startIntent = startPendingIntent(context, appWidgetId);
         views.setOnClickPendingIntent(R.id.widget_root, startIntent);
-        views.setOnClickPendingIntent(R.id.widget_button, startIntent);
 
         if (state == STATE_RUNNING && endEpoch > now) {
             long remaining = endEpoch - now;
@@ -167,7 +166,6 @@ public class PresetTimerWidgetProvider extends AppWidgetProvider {
             views.setViewVisibility(R.id.widget_chronometer, View.VISIBLE);
             views.setChronometer(R.id.widget_chronometer, base, null, true);
             views.setChronometerCountDown(R.id.widget_chronometer, true);
-            views.setTextViewText(R.id.widget_button, "RESTART");
         } else {
             views.setViewVisibility(R.id.widget_chronometer, View.GONE);
             views.setViewVisibility(R.id.widget_time, View.VISIBLE);
@@ -186,7 +184,6 @@ public class PresetTimerWidgetProvider extends AppWidgetProvider {
                         formatDuration(duration));
                 views.setTextColor(R.id.widget_time, 0xFF202020);
             }
-            views.setTextViewText(R.id.widget_button, "START");
         }
 
         manager.updateAppWidget(appWidgetId, views);
