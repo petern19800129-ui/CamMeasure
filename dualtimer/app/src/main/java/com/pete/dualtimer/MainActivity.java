@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
                             editor.putLong(statePrefix + "preset" + i, presets[i]);
                         }
                         editor.apply();
+                        PresetTimerWidgetProvider.updateAllWidgets(MainActivity.this);
 
                         selectedMs = presets[selectedPreset];
                         if (!running) remainingMs = selectedMs;
