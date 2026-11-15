@@ -43,3 +43,16 @@ jobs:
           name: DualTimer-v1.2.1-apk
           path: DualTimer-v1.2.1.apk
           if-no-files-found: error
+
+      - name: Package build kit
+        run: |
+          chmod +x dualtimer/build.sh
+          cp -a dualtimer DualTimer-v1.2.1-build-kit
+          zip -r DualTimer-v1.2.1-build-kit.zip DualTimer-v1.2.1-build-kit
+
+      - name: Upload build kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: DualTimer-v1.2.1-build-kit
+          path: DualTimer-v1.2.1-build-kit.zip
+          if-no-files-found: error
